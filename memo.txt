@@ -1,0 +1,22 @@
+python train.py --img 500 --batch 32 --epochs 10 --data custom_train.yaml
+
+[train]
+python train_multi.py \
+--weights '' \
+--cfg cfg/yolov3-spp-1cls-4channel.cfg \
+--data data/kaist.data \
+--epochs 100 \
+--device 0
+
+python train_multi.py \
+--weights '' \
+--cfg cfg/yolov3-spp-1cls-4channel.cfg \
+--data data/my.data \
+--epochs 400 \
+--device 0
+
+[detect]
+python detect_multi.py \
+--cfg cfg/yolov3-spp-1cls-4channel.cfg \
+--source data/fujino-dataset/detect/20180903_1733 \
+--weights weights/fujino_100ep.pt
