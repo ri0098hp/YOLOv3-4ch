@@ -278,7 +278,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 raise Exception(f"{path} does not exist")
             self.img_files = [x.replace("/", os.sep) for x in f if os.path.splitext(x)[-1].lower() in img_formats]
             # okuda: "RGB/"をパスの中に含むものを取得
-            self.img_files = sorted([file for file in self.img_files if "RGB" + os.sep in file])
+            self.img_files = sorted([file for file in self.img_files if os.sep + "RGB" + os.sep in file])
         except Exception:
             raise Exception(f"Error loading data from {path}. See {help_url}")
 
@@ -296,7 +296,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             else:
                 raise Exception("%s does not exist" % path_ir)
             self.img_files_ir = [x.replace("/", os.sep) for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-            self.img_files_ir = sorted([file for file in self.img_files_ir if "FIR" + os.sep in file])
+            self.img_files_ir = sorted([file for file in self.img_files_ir if os.sep + "FIR" + os.sep in file])
         except Exception:
             raise Exception(f"Error loading data from {_path_ir}. See {help_url}")
 

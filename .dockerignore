@@ -12,7 +12,7 @@ storage.googleapis.com
 data
 cfg
 share
-
+.git
 
 data/samples/*
 !data/samples/zidane.jpg
