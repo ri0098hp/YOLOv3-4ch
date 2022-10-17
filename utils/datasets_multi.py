@@ -247,9 +247,11 @@ class LoadStreams:  # multiple IP or RTSP cameras
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(
         self,
-        flag,
-        path_rgb,
-        path_ir,
+        is_train,
+        data_path,
+        rgb_folder,
+        fir_folder,
+        labels_folder,
         nchannel=3,
         img_size=416,
         batch_size=16,
@@ -261,44 +263,39 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         single_cls=False,
         pad=0.0,
     ):
-        try:  # load RGB
-            # os-agnostic data/kaist/kaistvisdaytrain.txt
-            print(flag)
-            path = str(Path(path_rgb))
-            parent = str(Path(path).parent) + os.sep  # data/kaist/
-            if os.path.isfile(path):  # file
-                with open(path, "r") as f:
-                    f = f.read().splitlines()
-                    # local to global path
-                    f = sorted([x.replace("./", parent) if x.startswith("./") else x for x in f])
-            elif os.path.isdir(path):  # folder
-                print("load from RGB folder")
-                f = glob.iglob(os.path.join(path, "**", "*.*"), recursive=True)
+        print()
+        # Define image files
+        try:
+            path = str(Path(data_path))
+            # print(f"target: {path}")
+            os.makedirs(path + os.sep + "cache", exist_ok=True)
+            if os.path.isdir(path):
+                # loading RGB images
+                f = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, "*.*"), recursive=True))
+                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+                sep = f[::7]  # dividing train:val = 6:1
+                if is_train == "train":
+                    for target in sep:
+                        f.remove(target)
+                    self.img_files = f
+                else:
+                    self.img_files = sep
+
+                # loading FIR images
+                f = sorted(glob.iglob(os.path.join(path, "**", fir_folder, "*.*"), recursive=True))
+                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+                sep = f[::7]
+                if is_train == "train":
+                    for target in sep:  # dividing train:val = 6:1
+                        f.remove(target)
+                    self.img_files_ir = f
+                else:
+                    self.img_files_ir = sep
             else:
-                raise Exception(f"{path} does not exist")
-            self.img_files = [x.replace("/", os.sep) for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-            # okuda: "RGB/"をパスの中に含むものを取得
-            self.img_files = sorted([file for file in self.img_files if os.sep + "RGB" + os.sep in file])
+                raise Exception(f"{path} dir does not exist")
+            # extract path with images
         except Exception:
             raise Exception(f"Error loading data from {path}. See {help_url}")
-
-        try:  # load FIR
-            _path_ir = str(Path(path_ir))  # os-agnostic
-            _parent = str(Path(_path_ir).parent) + os.sep
-            if os.path.isfile(path_ir):  # file
-                with open(path_ir, "r") as f:
-                    f = f.read().splitlines()
-                    # local to global path
-                    f = sorted([x.replace("./", _parent) if x.startswith("./") else x for x in f])
-            elif os.path.isdir(_path_ir):  # folder
-                print("load from FIR folder")
-                f = glob.iglob(os.path.join(_path_ir, "**", "*.*"), recursive=True)
-            else:
-                raise Exception("%s does not exist" % path_ir)
-            self.img_files_ir = [x.replace("/", os.sep) for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-            self.img_files_ir = sorted([file for file in self.img_files_ir if os.sep + "FIR" + os.sep in file])
-        except Exception:
-            raise Exception(f"Error loading data from {_path_ir}. See {help_url}")
 
         n = len(self.img_files)
         assert n > 0, "No images found in %s. See %s" % (path, help_url)
@@ -321,15 +318,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         # Define labels
         self.label_files = []
         for x in self.img_files_ir:
-            label_fp = x.replace("FIR", "FIR_labels").replace(os.path.splitext(x)[-1], ".txt")
-            # label_fp = x.replace("RGB", "RGB_labels").replace(os.path.splitext(x)[-1], ".txt")
+            label_fp = x.replace("FIR", labels_folder).replace(os.path.splitext(x)[-1], ".txt")
             if os.path.exists(label_fp):  # labels in FIR_labels
                 self.label_files.append(label_fp)
             else:  # labels in same folder
                 self.label_files.append(x.replace(os.path.splitext(x)[-1], ".txt"))
 
         # Read image shapes (wh)
-        sp = path.replace(".txt", "") + ".shapes"  # shapefile path
+        sp = os.path.join(path.replace(".txt", ""), "cache", f"{is_train}.shapes")  # shapefile path
         try:
             with open(sp, "r") as f:  # read existing shapefile
                 s = [x.split() for x in f.read().splitlines()]
@@ -340,8 +336,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         self.shapes = np.array(s, dtype=np.float64)
 
-        print(f"RGB: {len(self.img_files)} files")  # okuda
-        print(f"FIR: {len(self.img_files_ir)} files")  # okuda
         # Rectangular Training  https://github.com/ultralytics/yolov3/issues/232
         if self.rect:
             # Sort by aspect ratio
@@ -373,7 +367,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         # number missing, found, empty, datasubset, duplicate
         nm, nf, ne, ns, nd = 0, 0, 0, 0, 0
         # saved labels in *.npy file
-        np_labels_path = str(Path(self.label_files[0]).parent) + ".npy"
+        np_labels_path = os.path.join(str(Path(self.label_files[0]).parents[2]), "cache", f"{is_train}_labels.npy")
         if os.path.isfile(np_labels_path):
             s = np_labels_path  # print string
             x = np.load(np_labels_path, allow_pickle=True)
@@ -453,9 +447,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 nd,
                 n,
             )
+
+        # show avaival data sizes
+        print("##########################")
+        print(f"{is_train} data has ...")
+        print(f"RGB: {len(self.img_files)} files")
+        print(f"FIR: {len(self.img_files_ir)} files")
+        print(f"labes: {nf} files")
+        print("##########################")
+
         assert nf > 0 or n == 20288, "No labels found in %s. See %s" % (os.path.dirname(file) + os.sep, help_url)
         if not labels_loaded and n > 1000:
-            print("Saving labels to %s for faster future loading" % np_labels_path)
+            # print("Saving labels to %s for faster future loading" % np_labels_path)
             np.save(np_labels_path, self.labels)  # save for next time
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)

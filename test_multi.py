@@ -66,8 +66,10 @@ def test(
     module_defs = parse_model_cfg(cfg)
     nchannels = module_defs[0]["channels"]  # parsing channel from cfg
     nc = 1 if single_cls else int(data["classes"])  # number of classes
-    path_rgb = data["valid_rgb"]  # path to test images
-    path_ir = data["valid_ir"]
+    data_path = data["data_path"]
+    rgb_folder = data["rgb_folder"]
+    fir_folder = data["fir_folder"]
+    labels_folder = data["labels_folder"]
     names = load_classes(data["names"])  # class names
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     iouv = iouv[0].view(1)  # comment for mAP@0.5:0.95
@@ -76,7 +78,17 @@ def test(
     # Dataloader
     if dataloader is None:
         dataset = LoadImagesAndLabels(
-            path_rgb, path_ir, nchannels, imgsz, batch_size, rect=True, single_cls=opt.single_cls, pad=0.5
+            "test",
+            data_path,
+            rgb_folder,
+            fir_folder,
+            labels_folder,
+            nchannels,
+            imgsz,
+            batch_size,
+            rect=True,
+            single_cls=opt.single_cls,
+            pad=0.5,
         )
         batch_size = min(batch_size, len(dataset))
         dataloader = DataLoader(
