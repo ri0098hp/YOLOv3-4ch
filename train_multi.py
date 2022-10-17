@@ -82,10 +82,10 @@ def train(hyp):
     data_dict = parse_data_cfg(data)
     module_defs = parse_model_cfg(cfg)
     nchannels = module_defs[0]["channels"]
-    train_path_rgb = data_dict["train_rgb"]
-    train_path_ir = data_dict["train_ir"]
-    test_path_rgb = data_dict["valid_rgb"]
-    test_path_ir = data_dict["valid_ir"]
+    data_path = data_dict["data_path"]
+    rgb_folder = data_dict["rgb_folder"]
+    fir_folder = data_dict["fir_folder"]
+    labels_folder = data_dict["labels_folder"]
     nc = 1 if opt.single_cls else int(data_dict["classes"])  # number of classes
     hyp["cls"] *= nc / 80  # update coco-tuned hyp['cls'] to current dataset
 
@@ -202,8 +202,10 @@ def train(hyp):
     print(f"parameters: {hyp}")
     dataset = LoadImagesAndLabels(
         "train",
-        train_path_rgb,
-        train_path_ir,
+        data_path,
+        rgb_folder,
+        fir_folder,
+        labels_folder,
         nchannels,
         img_size,
         batch_size,
@@ -230,8 +232,10 @@ def train(hyp):
     testloader = torch.utils.data.DataLoader(
         LoadImagesAndLabels(
             "test",
-            test_path_rgb,
-            test_path_ir,
+            data_path,
+            rgb_folder,
+            fir_folder,
+            labels_folder,
             nchannels,
             imgsz_test,
             batch_size,
@@ -479,7 +483,7 @@ if __name__ == "__main__":
     parser.add_argument("--freeze-layers", action="store_true", help="Freeze non-output layers")
     opt = parser.parse_args()
     opt.weights = last if opt.resume else opt.weights
-    check_git_status()
+    # check_git_status()
     opt.cfg = check_file(opt.cfg)  # check file
     opt.data = check_file(opt.data)  # check file
     print(opt)
