@@ -12,7 +12,7 @@ python train_multi.py \
 --weights '' \
 --cfg cfg/yolov3-spp-1cls-4channel.cfg \
 --data data/test.data \
---epochs 1 \
+--epochs 2 \
 --device 0
 
 [detect]
@@ -20,3 +20,5 @@ python detect_multi.py \
 --cfg cfg/yolov3-spp-1cls-4channel.cfg \
 --source data/fujino-dataset/detect/20180903_1733 \
 --weights weights/fujino_100ep.pt
+
+pgrep python | xargs kill -9

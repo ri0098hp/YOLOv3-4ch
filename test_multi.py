@@ -199,12 +199,12 @@ def test(
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
         # Plot images #not plotting for 4 channels
-        # if batch_i < 1:
-        #     f = 'test_batch%g_gt.jpg' % batch_i  # filename
-        #     plot_images(imgs, targets, paths=paths, names=names, fname=f)  # ground truth
-        #     f = 'test_batch%g_pred.jpg' % batch_i
-        #     plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
-        #     # predictions
+        if batch_i < 1:
+            f = save_folder + os.sep + f"test_batch{batch_i}_gt.jpg"  # filename
+            plot_images(imgs, targets, paths=paths, names=names, fname=f)  # ground truth
+            f = save_folder + os.sep + f"test_batch{batch_i}_pred.jpg"
+            plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
+            # predictions
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy

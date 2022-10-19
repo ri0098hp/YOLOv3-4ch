@@ -5,6 +5,7 @@ import glob
 import math
 import os
 import random
+import re
 import shutil
 import time
 from pathlib import Path
@@ -265,37 +266,50 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
     ):
         print()
         # Define image files
+        path = str(Path(data_path))
+        # print(f"target: {path}")
+        os.makedirs(path + os.sep + "cache", exist_ok=True)
         try:
-            path = str(Path(data_path))
-            # print(f"target: {path}")
-            os.makedirs(path + os.sep + "cache", exist_ok=True)
-            if os.path.isdir(path):
-                # loading RGB images
-                f = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, "*.*"), recursive=True))
-                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-                sep = f[::7]  # dividing train:val = 6:1
-                if is_train == "train":
-                    for target in sep:
-                        f.remove(target)
-                    self.img_files = f
-                else:
-                    self.img_files = sep
-
-                # loading FIR images
-                f = sorted(glob.iglob(os.path.join(path, "**", fir_folder, "*.*"), recursive=True))
-                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-                sep = f[::7]
-                if is_train == "train":
-                    for target in sep:  # dividing train:val = 6:1
-                        f.remove(target)
-                    self.img_files_ir = f
-                else:
-                    self.img_files_ir = sep
+            # loading RGB images
+            f = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, "*.*"), recursive=True))
+            f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+            f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))
+            sep = f[::5]  # dividing train:val = 4:1
+            if is_train == "train":
+                for target in sep:
+                    f.remove(target)
+                self.img_files = f
             else:
-                raise Exception(f"{path} dir does not exist")
-            # extract path with images
+                self.img_files = sep
         except Exception:
             raise Exception(f"Error loading data from {path}. See {help_url}")
+
+        try:
+            # loading FIR images
+            # f = sorted(glob.iglob(os.path.join(path, "**", fir_folder, "*.*"), recursive=True))
+            # f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+            # f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))
+            # sep = f[::7]
+            # if is_train == "train":
+            #     for target in sep:  # dividing train:val = 6:1
+            #         f.remove(target)
+            #     self.img_files_ir = f
+            # else:
+            #     self.img_files_ir = sep
+            self.img_files_ir = [
+                x.replace(os.sep + rgb_folder + os.sep, os.sep + fir_folder + os.sep) for x in self.img_files
+            ]
+        except Exception:
+            raise Exception(f"Error loading data from {path}. See {help_url}")
+
+        # show miss match files between rgb and fir
+        miss_match = [
+            os.path.basename(rgb)
+            for rgb, fir in zip(self.img_files, self.img_files_ir)
+            if os.path.basename(rgb) != os.path.basename(fir)
+        ]
+        if miss_match != []:
+            print(f"miss matched imgaes :{len(miss_match)}")
 
         n = len(self.img_files)
         assert n > 0, "No images found in %s. See %s" % (path, help_url)
@@ -318,7 +332,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         # Define labels
         self.label_files = []
         for x in self.img_files_ir:
-            label_fp = x.replace("FIR", labels_folder).replace(os.path.splitext(x)[-1], ".txt")
+            x = x.replace(os.sep + "FIR" + os.sep, os.sep + labels_folder + os.sep)
+            label_fp = x.replace(os.path.splitext(x)[-1], ".txt")
             if os.path.exists(label_fp):  # labels in FIR_labels
                 self.label_files.append(label_fp)
             else:  # labels in same folder
@@ -372,21 +387,24 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             s = np_labels_path  # print string
             x = np.load(np_labels_path, allow_pickle=True)
             if len(x) == n:
+                print("here")
                 self.labels = x
                 labels_loaded = True
+                print(f"npy at {s} was loaded")
         else:
+            # save npy folder
             s = path.replace("images", "labels")
+            print("there is no labels cache")
+
         pbar = tqdm(self.label_files)
         for i, file in enumerate(pbar):
             if labels_loaded:
                 l = self.labels[i]
-                np.savetxt(file, l, "%g")  # save *.txt from *.npy file
             else:
                 try:
                     with open(file, "r") as f:
                         l = np.array([x.split() for x in f.read().splitlines()], dtype=np.float32)
                 except Exception:
-                    # print('missing labels for image %s' % self.img_files[i])  # file missing
                     nm += 1
                     continue
 
@@ -599,12 +617,9 @@ def load_image_multi(self, index):
         path_ir = self.img_files_ir[index]
 
         img_rgb = cv2.imread(path_rgb)  # reading rgb
-        # print("Image RGB shape", img_rgb.shape)
         img_ir = cv2.imread(path_ir, 0)  # reading grayscale
-        # print("Image IR shape", img_ir.shape)
-
         img = cv2.merge((img_rgb, img_ir))  # combine rgb + ir
-        # print("Image 4 channel", img.shape)
+
         assert img is not None, "Image Not Found " + path_rgb
         h0, w0 = img.shape[:2]  # orig hw #only 2 values, since grayscale
         r = self.img_size / max(h0, w0)  # resize image to img_size
