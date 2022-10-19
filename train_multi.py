@@ -20,7 +20,8 @@ except Exception:
 wdir = "weights" + os.sep  # weights dir
 last = wdir + "last.pt"
 best = wdir + "best.pt"
-results_file = "results.txt"
+save_fodler = "share"
+results_file = save_fodler + os.sep + "results.txt"
 
 # Hyperparameters
 hyp = {
@@ -269,9 +270,9 @@ def train(hyp):
     print("Image sizes %g - %g train, %g test" % (imgsz_min, imgsz_max, imgsz_test))
     print("Using %g dataloader workers" % nw)
     print("Starting training for %g epochs..." % epochs)
-    for epoch in range(
-        start_epoch, epochs
-    ):  # epoch ------------------------------------------------------------------
+
+    # epoch ------------------------------------------------------------------
+    for epoch in range(start_epoch, epochs):
         model.train()
 
         # directory for epoch every 5 epoch
@@ -286,12 +287,9 @@ def train(hyp):
         mloss = torch.zeros(4).to(device)  # mean losses
         print(("\n" + "%10s" * 8) % ("Epoch", "gpu_mem", "GIoU", "obj", "cls", "total", "targets", "img_size"))
         pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
-        for i, (
-            imgs,
-            targets,
-            paths,
-            _,
-        ) in pbar:  # batch -------------------------------------------------------------
+
+        # batch -------------------------------------------------------------
+        for i, (imgs, targets, paths, _) in pbar:
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
             targets = targets.to(device)
@@ -347,14 +345,14 @@ def train(hyp):
             pbar.set_description(s)
 
             # Plot
-            # Comment because no plotting for 4 channel images
-            # if ni < 1:
-            #     f = 'train_batch%g.jpg' % i  # filename
-            #     res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+            if ni < 1:
+                f = save_folder + os.sep + f"train_batch{i}.jpg"
+                if os.path.isfile(f):
+                    os.remove(f)
+                _ = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
             # if tb_writer:
-            #     tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
+            #     tb_writer.add_image(f, res, dataformats="HWC", global_step=epoch)
             #     tb_writer.add_graph(model, imgs)  # add model to tensorboard
-
             # end batch ------------------------------------------------------------------
 
         # Update scheduler
@@ -443,6 +441,7 @@ def train(hyp):
                 os.system("gsutil cp %s gs://%s/weights" % (f2, opt.bucket)) if opt.bucket and ispt else None  # upload
 
     if not opt.evolve:
+        # False
         plot_results()  # save as results.png
     print("%g epochs completed in %.3f hours.\n" % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
     dist.destroy_process_group() if torch.cuda.device_count() > 1 else None

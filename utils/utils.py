@@ -28,6 +28,8 @@ matplotlib.rc("font", **{"size": 11})
 # Prevent OpenCV from multithreading (to use PyTorch DataLoader)
 cv2.setNumThreads(0)
 
+save_folder = "share"
+
 
 def init_seeds(seed=0):
     random.seed(seed)
@@ -250,7 +252,8 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
     s = [unique_classes.shape[0], tp.shape[1]]  # number class, number iou thresholds (i.e. 10 for mAP0.5...0.95)
     ap, p, r = np.zeros(s), np.zeros(s), np.zeros(s)
     for ci, c in enumerate(unique_classes):
-        result_pr = open(f"pr_curve_class{c}.txt", "w+")  # create a file for saving precision, recall, and conf
+        # create a file for saving precision, recall, and conf
+        result_pr = open(f"{save_folder + os.sep}pr_curve_class{c}.txt", "w+")
 
         i = pred_cls == c
         n_gt = (target_cls == c).sum()  # Number of ground truth objects
@@ -293,14 +296,18 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
 
             # print(p[ci], r[ci])
             # Plot
-            # fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-            # ax.plot(recall, precision)
-            # ax.set_xlabel('Recall')
-            # ax.set_ylabel('Precision')
-            # ax.set_xlim(0, 1.01)
-            # ax.set_ylim(0, 1.01)
-            # fig.tight_layout()
-            # fig.savefig(f'PR_curve_{c}.png', dpi=300)
+            fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.plot(recall, precision)
+            ax.set_xlabel("Recall")
+            ax.set_ylabel("Precision")
+            ax.set_xlim(0, 1.01)
+            ax.set_ylim(0, 1.01)
+            fig.tight_layout()
+            fig.savefig(f"{save_folder + os.sep}PR_curve_{c}.png", dpi=300)
+            fig.clear()
+            plt.cla
+            plt.clf
+            plt.close
 
     # Compute F1 score (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + 1e-16)
@@ -643,7 +650,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
                 weights = iou * scores[None]  # box weights
                 x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
                 # i = i[iou.sum(1) > 1]  # require redundancy
-            except:  # possible CUDA error https://github.com/ultralytics/yolov3/issues/1139
+            except Exception:  # possible CUDA error https://github.com/ultralytics/yolov3/issues/1139
                 print(x, i, x.shape, i.shape)
                 pass
 
@@ -681,7 +688,7 @@ def print_model_biases(model):
                     "%5.2f+/-%-5.2f" % (b[:, 5:].mean(), b[:, 5:].std()),
                 )
             )
-    except:
+    except Exception:
         pass
 
 
@@ -934,7 +941,7 @@ def output_to_target(output, width, height):
     return np.array(targets)
 
 
-# Plotting functions ---------------------------------------------------------------------------------------------------
+# Plotting functions ---------------------------------------------------------------------------------
 def plot_one_box(x, img, color=None, label=None, line_thickness=None):
     # Plots one bounding box on image img
     tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
@@ -1018,7 +1025,10 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
         if scale_factor < 1:
             img = cv2.resize(img, (w, h))
 
-        mosaic[block_y : block_y + h, block_x : block_x + w, :] = img
+        if img.shape[2] == 4:
+            ir, b, g, r = cv2.split(img)
+            img = cv2.merge((b, g, r))
+        mosaic[block_y : block_y + h, block_x : block_x + w, :] = img[:, :, :3]
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
@@ -1136,7 +1146,8 @@ def plot_evolution_results(hyp):  # from utils.utils import *; plot_evolution_re
     x = np.loadtxt("evolve.txt", ndmin=2)
     f = fitness(x)
     # weights = (f - f.min()) ** 2  # for weighted results
-    fig = plt.figure(figsize=(12, 10), tight_layout=True)
+    # fig = plt.figure(figsize=(12, 10), tight_layout=True)
+    plt.figure(figsize=(12, 10), tight_layout=True)
     matplotlib.rc("font", **{"size": 8})
     for i, (k, v) in enumerate(hyp.items()):
         y = x[:, i + 7]
@@ -1208,8 +1219,8 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
                 ax[i].set_title(s[i])
                 # if i in [5, 6, 7]:  # share train and val loss y axes
                 #     ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
-        except:
+        except Exception:
             print("Warning: Plotting error for %s, skipping file" % f)
 
     ax[1].legend()
-    fig.savefig("results.png", dpi=200)
+    fig.savefig(save_folder + os.sep + "results.png", dpi=200)
