@@ -12,7 +12,7 @@ python train_multi.py \
 --weights '' \
 --cfg cfg/yolov3-spp-1cls-4channel.cfg \
 --data data/test.data \
---epochs 2 \
+--epochs 25 \
 --device 0
 
 [detect]

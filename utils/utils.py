@@ -304,10 +304,9 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             ax.set_ylim(0, 1.01)
             fig.tight_layout()
             fig.savefig(f"{save_folder + os.sep}PR_curve_{c}.png", dpi=300)
-            fig.clear()
-            plt.cla
-            plt.clf
-            plt.close
+            plt.cla()
+            plt.clf()
+            plt.close(fig)
 
     # Compute F1 score (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + 1e-16)
@@ -1224,3 +1223,4 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
 
     ax[1].legend()
     fig.savefig(save_folder + os.sep + "results.png", dpi=200)
+    plt.close(fig)
