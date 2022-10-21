@@ -303,7 +303,7 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             ax.set_xlim(0, 1.01)
             ax.set_ylim(0, 1.01)
             fig.tight_layout()
-            fig.savefig(f"{save_folder + os.sep}PR_curve_{c}.png", dpi=300)
+            fig.savefig(f"{save_folder + os.sep}PR_curve_{c}.svg", dpi=300)
             plt.cla()
             plt.clf()
             plt.close(fig)
@@ -934,27 +934,23 @@ def output_to_target(output, width, height):
                 y = box[1] / height + h / 2
                 conf = pred[4]
                 cls = int(pred[5])
-
                 targets.append([i, cls, x, y, w, h, conf])
-
     return np.array(targets)
 
 
 # Plotting functions ---------------------------------------------------------------------------------
-def plot_one_box(x, img, color=None, label=None, line_thickness=None):
+def plot_one_box(x, img, color=[124, 255, 0], label=None, line_thickness=None):
     # Plots one bounding box on image img
     tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
-    color = color or [random.randint(0, 255) for _ in range(3)]
     c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
     cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
     if label:
-        tf = max(tl - 1, 1)  # font thickness
+        tf = max(tl - 1, 2)  # font thickness
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
         c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
         cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
-        label_color = (
-            [0, 0, 0] if color == [255, 255, 255] else [225, 255, 255]
-        )  # label color is black if the bounding box is white
+        # label color is black if the bounding box is white
+        label_color = [0, 0, 0, 0] if color == [255, 255, 255] else [225, 255, 255, 255]
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, label_color, thickness=tf, lineType=cv2.LINE_AA)
 
 
@@ -1202,7 +1198,7 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
         os.system("rm -rf storage.googleapis.com")
         files = ["https://storage.googleapis.com/%s/results%g.txt" % (bucket, x) for x in id]
     else:
-        files = glob.glob("results*.txt") + glob.glob("../../Downloads/results*.txt")
+        files = glob.glob(save_folder + os.sep + "results*.txt") + glob.glob("../../Downloads/results*.txt")
     for f in sorted(files):
         try:
             results = np.loadtxt(f, usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11], ndmin=2).T
@@ -1220,7 +1216,8 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
                 #     ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
         except Exception:
             print("Warning: Plotting error for %s, skipping file" % f)
-
     ax[1].legend()
-    fig.savefig(save_folder + os.sep + "results.png", dpi=200)
+    fig.savefig(save_folder + os.sep + "results.svg", dpi=200)
+    plt.cla()
+    plt.clf()
     plt.close(fig)

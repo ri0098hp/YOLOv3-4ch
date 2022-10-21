@@ -7,6 +7,8 @@ from models import *
 from utils.datasets_multi import *
 from utils.utils import *
 
+save_folder = "share"
+
 
 def test(
     cfg,
@@ -37,7 +39,7 @@ def test(
         # verbose = opt.task == 'test'
 
         # Remove previous
-        for f in glob.glob("test_batch*.jpg"):
+        for f in glob.glob(save_folder + os.sep + "test_batch*.jpg"):
             os.remove(f)
 
         # Initialize model
@@ -272,7 +274,7 @@ def test(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="test.py")
     parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
-    parser.add_argument("--data", type=str, default="data/kaist/kaist_person_day_rgb.data", help="*.data path")
+    parser.add_argument("--data", type=str, default="data/kaist.data", help="*.data path")
     parser.add_argument("--weights", type=str, default="weights/best.pt", help="weights path")
     parser.add_argument("--batch-size", type=int, default=16, help="size of each image batch")
     parser.add_argument("--img-size", type=int, default=512, help="inference size (pixels)")
