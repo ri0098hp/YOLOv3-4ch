@@ -1,24 +1,15 @@
-python train.py --img 500 --batch 32 --epochs 10 --data custom_train.yaml
-
 [train]
-python train_multi.py \
---weights '' \
---cfg cfg/yolov3-spp-1cls-4channel.cfg \
---data data/fujino.data \
---epochs 100 \
---device 0
+python train_multi.py --epochs 1 --device 0
 
 python train_multi.py \
---weights '' \
---cfg cfg/yolov3-spp-1cls-4channel.cfg \
 --data data/test.data \
---epochs 2 \
+--epochs 25 \
 --device 0
 
 [detect]
-python detect_multi.py \
---cfg cfg/yolov3-spp-1cls-4channel.cfg \
---source data/fujino-dataset/detect/20180903_1733 \
---weights weights/fujino_100ep.pt
+python detect_multi.py --weights weights/fujino_ref.pt --only-det
+
+[test]
+python test_multi.py --weights weights/fujino_ref.pt
 
 pgrep python | xargs kill -9

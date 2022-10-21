@@ -227,14 +227,16 @@ def clip_coords(boxes, img_shape):
     boxes[:, 3].clamp_(0, img_shape[0])  # y2
 
 
-def ap_per_class(tp, conf, pred_cls, target_cls):
+def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names=(), eps=1e-16):
     """Compute the average precision, given the recall and precision curves.
     Source: https://github.com/rafaelpadilla/Object-Detection-Metrics.
     # Arguments
-        tp:    True positives (nparray, nx1 or nx10).
+        tp:  True positives (nparray, nx1 or nx10).
         conf:  Objectness value from 0-1 (nparray).
-        pred_cls: Predicted object classes (nparray).
-        target_cls: True object classes (nparray).
+        pred_cls:  Predicted object classes (nparray).
+        target_cls:  True object classes (nparray).
+        plot:  Plot precision-recall curve at mAP@0.5
+        save_dir:  Plot save directory
     # Returns
         The average precision as computed in py-faster-rcnn.
     """
@@ -244,22 +246,18 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
     tp, conf, pred_cls = tp[i], conf[i], pred_cls[i]
 
     # Find unique classes
-    unique_classes = np.unique(target_cls)
+    unique_classes, nt = np.unique(target_cls, return_counts=True)
+    nc = unique_classes.shape[0]  # number of classes, number of detections
 
     # Create Precision-Recall curve and compute AP for each class
-    pr_score = 0.1  # score to evaluate P and R https://github.com/ultralytics/yolov3/issues/898
-
-    s = [unique_classes.shape[0], tp.shape[1]]  # number class, number iou thresholds (i.e. 10 for mAP0.5...0.95)
-    ap, p, r = np.zeros(s), np.zeros(s), np.zeros(s)
+    px, py = np.linspace(0, 1, 1000), []  # for plotting
+    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
-        # create a file for saving precision, recall, and conf
-        result_pr = open(f"{save_folder + os.sep}pr_curve_class{c}.txt", "w+")
-
         i = pred_cls == c
-        n_gt = (target_cls == c).sum()  # Number of ground truth objects
-        n_p = i.sum()  # Number of predicted objects
+        n_l = nt[ci]  # number of labels
+        n_p = i.sum()  # number of predictions
 
-        if n_p == 0 or n_gt == 0:
+        if n_p == 0 or n_l == 0:
             continue
         else:
             # Accumulate FPs and TPs
@@ -267,66 +265,50 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             tpc = tp[i].cumsum(0)
 
             # Recall
-            recall = tpc / (n_gt + 1e-16)  # recall curve
-            r[ci] = np.interp(-pr_score, -conf[i], recall[:, 0])  # r at pr_score, negative x, xp because xp decreases
+            recall = tpc / (n_l + eps)  # recall curve
+            r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
 
             # Precision
             precision = tpc / (tpc + fpc)  # precision curve
-            p[ci] = np.interp(-pr_score, -conf[i], precision[:, 0])  # p at pr_score
+            p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
 
             # AP from recall-precision curve
             for j in range(tp.shape[1]):
-                ap[ci, j] = compute_ap(recall[:, j], precision[:, j])
+                # ap[ci, j] = compute_ap(recall[:, j], precision[:, j])
+                ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
+                if plot and j == 0:
+                    py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
 
-            # write precision, recall, and conf
-            precision_reshape = precision.reshape(
-                [
-                    precision.shape[0],
-                ]
-            )  # reshape precision to be 1D
-            recall_reshape = recall.reshape(
-                [
-                    recall.shape[0],
-                ]
-            )  # reshapre recall to be 1D similar to conf
-            for x in range(len(precision_reshape)):
-                result_to_save = str(conf[x]) + " " + str(precision_reshape[x]) + " " + str(recall_reshape[x]) + "\n"
-                result_pr.write(result_to_save)
-            result_pr.close()
+    # Compute F1 (harmonic mean of precision and recall)
+    f1 = 2 * p * r / (p + r + eps)
+    names = {i: v for i, v in enumerate(names)}  # to dict
+    names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
+    names = {i: v for i, v in enumerate(names)}  # to dict
+    if plot:
+        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.png", names)
+        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.png", names, ylabel="F1")
+        plot_mc_curve(px, p, Path(save_dir) / "P_curve.png", names, ylabel="Precision")
+        plot_mc_curve(px, r, Path(save_dir) / "R_curve.png", names, ylabel="Recall")
 
-            # print(p[ci], r[ci])
-            # Plot
-            fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-            ax.plot(recall, precision)
-            ax.set_xlabel("Recall")
-            ax.set_ylabel("Precision")
-            ax.set_xlim(0, 1.01)
-            ax.set_ylim(0, 1.01)
-            fig.tight_layout()
-            fig.savefig(f"{save_folder + os.sep}PR_curve_{c}.png", dpi=300)
-            fig.clear()
-            plt.cla
-            plt.clf
-            plt.close
-
-    # Compute F1 score (harmonic mean of precision and recall)
-    f1 = 2 * p * r / (p + r + 1e-16)
-    return p, r, ap, f1, unique_classes.astype("int32")
+    i = f1.mean(0).argmax()  # max F1 index
+    p, r, f1 = p[:, i], r[:, i], f1[:, i]
+    tp = (r * nt).round()  # true positives
+    fp = (tp / (p + eps) - tp).round()  # false positives
+    return tp, fp, p, r, f1, ap, unique_classes.astype("int32")
 
 
 def compute_ap(recall, precision):
-    """Compute the average precision, given the recall and precision curves.
-    Source: https://github.com/rbgirshick/py-faster-rcnn.
+    """Compute the average precision, given the recall and precision curves
     # Arguments
-        recall:    The recall curve (list).
-        precision: The precision curve (list).
+        recall:    The recall curve (list)
+        precision: The precision curve (list)
     # Returns
-        The average precision as computed in py-faster-rcnn.
+        Average precision, precision curve, recall curve
     """
 
     # Append sentinel values to beginning and end
-    mrec = np.concatenate(([0.0], recall, [min(recall[-1] + 1e-3, 1.0)]))
-    mpre = np.concatenate(([0.0], precision, [0.0]))
+    mrec = np.concatenate(([0.0], recall, [1.0]))
+    mpre = np.concatenate(([1.0], precision, [0.0]))
 
     # Compute the precision envelope
     mpre = np.flip(np.maximum.accumulate(np.flip(mpre)))
@@ -340,7 +322,7 @@ def compute_ap(recall, precision):
         i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
 
-    return ap
+    return ap, mpre, mrec
 
 
 def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False):
@@ -935,27 +917,23 @@ def output_to_target(output, width, height):
                 y = box[1] / height + h / 2
                 conf = pred[4]
                 cls = int(pred[5])
-
                 targets.append([i, cls, x, y, w, h, conf])
-
     return np.array(targets)
 
 
 # Plotting functions ---------------------------------------------------------------------------------
-def plot_one_box(x, img, color=None, label=None, line_thickness=None):
+def plot_one_box(x, img, color=[124, 255, 0], label=None, line_thickness=None):
     # Plots one bounding box on image img
     tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
-    color = color or [random.randint(0, 255) for _ in range(3)]
     c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
     cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
     if label:
-        tf = max(tl - 1, 1)  # font thickness
+        tf = max(tl - 1, 2)  # font thickness
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
         c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
         cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
-        label_color = (
-            [0, 0, 0] if color == [255, 255, 255] else [225, 255, 255]
-        )  # label color is black if the bounding box is white
+        # label color is black if the bounding box is white
+        label_color = [0, 0, 0, 0] if color == [255, 255, 255] else [225, 255, 255, 255]
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, label_color, thickness=tf, lineType=cv2.LINE_AA)
 
 
@@ -1028,6 +1006,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
         if img.shape[2] == 4:
             ir, b, g, r = cv2.split(img)
             img = cv2.merge((b, g, r))
+            # img = cv2.cvtColor(ir, cv2.COLOR_GRAY2BGR)  # if you want FIR gt and pred image
         mosaic[block_y : block_y + h, block_x : block_x + w, :] = img[:, :, :3]
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
@@ -1069,7 +1048,6 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
     if fname is not None:
         mosaic = cv2.resize(mosaic, (int(ns * w * 0.5), int(ns * h * 0.5)), interpolation=cv2.INTER_AREA)
         cv2.imwrite(fname, cv2.cvtColor(mosaic, cv2.COLOR_BGR2RGB))
-
     return mosaic
 
 
@@ -1203,7 +1181,7 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
         os.system("rm -rf storage.googleapis.com")
         files = ["https://storage.googleapis.com/%s/results%g.txt" % (bucket, x) for x in id]
     else:
-        files = glob.glob("results*.txt") + glob.glob("../../Downloads/results*.txt")
+        files = glob.glob(save_folder + os.sep + "results*.txt") + glob.glob("../../Downloads/results*.txt")
     for f in sorted(files):
         try:
             results = np.loadtxt(f, usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11], ndmin=2).T
@@ -1221,6 +1199,54 @@ def plot_results(start=0, stop=0, bucket="", id=()):  # from utils.utils import 
                 #     ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
         except Exception:
             print("Warning: Plotting error for %s, skipping file" % f)
-
     ax[1].legend()
-    fig.savefig(save_folder + os.sep + "results.png", dpi=200)
+    fig.savefig(save_folder + os.sep + "results.svg", dpi=200)
+    plt.cla()
+    plt.clf()
+    plt.close(fig)
+
+
+def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
+    # Precision-recall curve
+    fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
+    py = np.stack(py, axis=1)
+
+    if 0 < len(names) < 21:  # display per-class legend if < 21 classes
+        for i, y in enumerate(py.T):
+            ax.plot(px, y, linewidth=1, label=f"{names[i]} {ap[i, 0]:.3f}")  # plot(recall, precision)
+    else:
+        ax.plot(px, py, linewidth=1, color="grey")  # plot(recall, precision)
+
+    ax.plot(px, py.mean(1), linewidth=3, color="blue", label="all classes %.3f mAP@0.5" % ap[:, 0].mean())
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    fig.savefig(Path(save_dir), dpi=250)
+    plt.cla()
+    plt.clf()
+    plt.close(fig)
+
+
+def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence", ylabel="Metric"):
+    # Metric-confidence curve
+    fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
+
+    if 0 < len(names) < 21:  # display per-class legend if < 21 classes
+        for i, y in enumerate(py):
+            ax.plot(px, y, linewidth=1, label=f"{names[i]}")  # plot(confidence, metric)
+    else:
+        ax.plot(px, py.T, linewidth=1, color="grey")  # plot(confidence, metric)
+
+    y = py.mean(0)
+    ax.plot(px, y, linewidth=3, color="blue", label=f"all classes {y.max():.2f} at {px[y.argmax()]:.3f}")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    fig.savefig(Path(save_dir), dpi=250)
+    plt.cla()
+    plt.clf()
+    plt.close(fig)
