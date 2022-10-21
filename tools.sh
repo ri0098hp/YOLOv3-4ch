@@ -11,8 +11,11 @@ EOM
 }
 
 
-while getopts "bdrsh" optKey; do
+while getopts "abdersh" optKey; do
   case "$optKey" in
+    a)
+      docker start -a YOLOv3-4ch
+      ;;
     b)
       docker build -t yolov3-4ch:latest .
       ;;
@@ -20,6 +23,9 @@ while getopts "bdrsh" optKey; do
       docker run --name YOLOv3-4ch-debug --gpus all -it --shm-size=12g --ipc=host --rm \
       --mount type=bind,source="$(pwd)",target=/usr/src/app/ \
       yolov3-4ch:test
+      ;;
+    e)
+      docker start -i YOLOv3-4ch
       ;;
     r)
       docker run --name YOLOv3-4ch --gpus all -it --shm-size=8g --ipc=host \

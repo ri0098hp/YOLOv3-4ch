@@ -24,14 +24,16 @@ def test(
     model=None,
     dataloader=None,
     multi_label=True,
+    plot=False,
+    device="0",
 ):
     # Initialize/load model and set device
     if model is None:
         is_training = False
 
         # use these 3 lines for 5 layer-small
-        no_device = "cuda" if torch.cuda.is_available() else "cpu"
-        device = torch_utils.select_device(no_device, batch_size=batch_size)
+        # no_device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = torch_utils.select_device(device, batch_size=batch_size)
         verbose = "test"
 
         # use this for 3 and 4 YOLO layer
@@ -200,18 +202,19 @@ def test(
             # Append statistics (correct, conf, pcls, tcls)
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
-        # Plot images #not plotting for 4 channels
-        if batch_i < 1:
-            f = save_folder + os.sep + f"test_batch{batch_i}_gt.jpg"  # filename
-            plot_images(imgs, targets, paths=paths, names=names, fname=f)  # ground truth
+        # Plot images
+        if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > 10 and plot):
+            # ground truth
+            f = save_folder + os.sep + f"test_batch{batch_i}_gt.jpg"
+            _ = plot_images(imgs, targets, paths=paths, names=names, fname=f)
+            # predict
             f = save_folder + os.sep + f"test_batch{batch_i}_pred.jpg"
-            plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
-            # predictions
+            _ = plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats):
-        p, r, ap, f1, ap_class = ap_per_class(*stats)
+        tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plot, save_dir=save_folder, names=names)
         if niou > 1:
             p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
         mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
@@ -220,8 +223,10 @@ def test(
         nt = torch.zeros(1)
 
     # Print results
-    pf = "%20s" + "%10.3g" * 6  # print format
+    pf = "%20s" + "%10.3g" * 6
     print(pf % ("all", seen, nt.sum(), mp, mr, map, mf1))
+    pf = "%20s" + "%10.3g" * 2
+    print(pf % ("TP, FP", tp, fp))
 
     # Print results per class
     if verbose and nc > 1 and len(stats):
@@ -264,17 +269,16 @@ def test(
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map, mf1, *(loss.cpu() / len(dataloader)).tolist()), maps
-
     # Clearing memory
     del model
     torch.cuda.empty_cache()
+    return (mp, mr, map, mf1, *(loss.cpu() / len(dataloader)).tolist()), maps
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="test.py")
     parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
-    parser.add_argument("--data", type=str, default="data/kaist.data", help="*.data path")
+    parser.add_argument("--data", type=str, default="data/fujino.data", help="*.data path")
     parser.add_argument("--weights", type=str, default="weights/best.pt", help="weights path")
     parser.add_argument("--batch-size", type=int, default=16, help="size of each image batch")
     parser.add_argument("--img-size", type=int, default=512, help="inference size (pixels)")
@@ -282,7 +286,7 @@ if __name__ == "__main__":
     parser.add_argument("--iou-thres", type=float, default=0.6, help="IOU threshold for NMS")
     parser.add_argument("--save-json", action="store_true", help="save a cocoapi-compatible JSON results file")
     parser.add_argument("--task", default="test", help="'test', 'study', 'benchmark'")
-    parser.add_argument("--device", default="", help="device id (i.e. 0 or 0,1) or cpu")
+    parser.add_argument("--device", default="0", help="device id (i.e. 0 or 0,1) or cpu")
     parser.add_argument("--single-cls", action="store_true", help="train as single-class dataset")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     opt = parser.parse_args()
@@ -304,6 +308,7 @@ if __name__ == "__main__":
             opt.save_json,
             opt.single_cls,
             opt.augment,
+            plot=True,
         )
 
     elif opt.task == "benchmark":  # mAPs at 256-640 at conf 0.5 and 0.7

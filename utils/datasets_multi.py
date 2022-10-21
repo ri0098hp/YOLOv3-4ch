@@ -387,10 +387,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             s = np_labels_path  # print string
             x = np.load(np_labels_path, allow_pickle=True)
             if len(x) == n:
-                print("here")
                 self.labels = x
                 labels_loaded = True
-                print(f"npy at {s} was loaded")
+                print(f"cached labels at {s} was loaded")
         else:
             # save npy folder
             s = path.replace("images", "labels")

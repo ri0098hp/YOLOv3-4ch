@@ -1,5 +1,5 @@
 [train]
-python train_multi.py --epochs 100 --device 0
+python train_multi.py --epochs 1 --device 0
 
 python train_multi.py \
 --data data/test.data \

@@ -453,7 +453,9 @@ def train(hyp):
         print("Validating the best model")
         best_weight = "weights/best.pt"
 
-        test.test(cfg, data, batch_size=16, weights=best_weight, imgsz=imgsz_test, dataloader=testloader)
+        test.test(
+            cfg, data, batch_size=16, weights=best_weight, imgsz=imgsz_test, dataloader=testloader, device=opt.device
+        )
         print("Final epoch has been validated")
 
     return results
@@ -462,7 +464,7 @@ def train(hyp):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=200)  # 500200 batches at bs 16, 117263 COCO images = 273 epochs
-    parser.add_argument("--batch-size", type=int, default=4)  # effective bs = batch_size * accumulate = 16 * 4 = 64
+    parser.add_argument("--batch-size", type=int, default=16)  # effective bs = batch_size * accumulate = 16 * 4 = 64
     parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
     parser.add_argument("--data", type=str, default="data/fujino.data", help="*.data path")
     parser.add_argument("--multi-scale", action="store_true", help="adjust (67%% - 150%%) img_size every 10 batches")
@@ -476,7 +478,7 @@ if __name__ == "__main__":
     parser.add_argument("--cache-images", action="store_true", help="cache images for faster training")
     parser.add_argument("--weights", type=str, default="", help="initial weights path")
     parser.add_argument("--name", default="", help="renames results.txt to results_name.txt if supplied")
-    parser.add_argument("--device", default="", help="device id (i.e. 0 or 0,1 or cpu)")
+    parser.add_argument("--device", default="0", help="device id (i.e. 0 or 0,1 or cpu)")
     parser.add_argument("--adam", action="store_true", help="use adam optimizer")
     parser.add_argument("--single-cls", action="store_true", help="train as single-class dataset")
     parser.add_argument("--freeze-layers", action="store_true", help="Freeze non-output layers")
