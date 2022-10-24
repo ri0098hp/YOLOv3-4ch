@@ -271,31 +271,40 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         os.makedirs(path + os.sep + "cache", exist_ok=True)
         try:
             # loading RGB images
-            f = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, "*.*"), recursive=True))
-            f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-            f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))
-            sep = f[::5]  # dividing train:val = 4:1
-            if is_train == "train":
-                for target in sep:
-                    f.remove(target)
-                self.img_files = f
-            else:
-                self.img_files = sep
+            dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
+            dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
+
+            fs = []
+            for dir in dirs:
+                f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
+                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+                f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
+
+                # train と test の振り分け
+                spl = split_list(f, 10)
+                try:
+                    d = int(re.sub(r"\D", "", dir))
+                except Exception:
+                    d = ord(dir[0])
+                idx_val = list(map(lambda x: (x + d) % 10, [3, 5, 9]))
+                idx_train = list(map(lambda x: (x + d) % 10, [0, 1, 2, 4, 6, 7, 8]))
+                if is_train == "train":
+                    for id in idx_train:
+                        fs += spl[id]
+                else:
+                    for id in idx_val:
+                        fs += spl[id]
+
+            # self.img_files = random.sample(fs, len(fs)) # slide data
+            self.img_files = fs
+            s = "\n".join(fs)
+            # with open(f"share/{is_train}_files.txt", "w") as f:
+            #     f.write(s)
+
         except Exception:
             raise Exception(f"Error loading data from {path}. See {help_url}")
 
         try:
-            # loading FIR images
-            # f = sorted(glob.iglob(os.path.join(path, "**", fir_folder, "*.*"), recursive=True))
-            # f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-            # f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))
-            # sep = f[::7]
-            # if is_train == "train":
-            #     for target in sep:  # dividing train:val = 6:1
-            #         f.remove(target)
-            #     self.img_files_ir = f
-            # else:
-            #     self.img_files_ir = sep
             self.img_files_ir = [
                 x.replace(os.sep + rgb_folder + os.sep, os.sep + fir_folder + os.sep) for x in self.img_files
             ]
@@ -331,13 +340,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         # Define labels
         self.label_files = []
-        for x in self.img_files_ir:
-            x = x.replace(os.sep + "FIR" + os.sep, os.sep + labels_folder + os.sep)
+        for f in self.img_files_ir:
+            x = f.replace(os.sep + fir_folder + os.sep, os.sep + labels_folder + os.sep)
             label_fp = x.replace(os.path.splitext(x)[-1], ".txt")
             if os.path.exists(label_fp):  # labels in FIR_labels
                 self.label_files.append(label_fp)
             else:  # labels in same folder
-                self.label_files.append(x.replace(os.path.splitext(x)[-1], ".txt"))
+                self.label_files.append(f.replace(os.path.splitext(x)[-1], ".txt"))
 
         # Read image shapes (wh)
         sp = os.path.join(path.replace(".txt", ""), "cache", f"{is_train}.shapes")  # shapefile path
@@ -466,12 +475,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             )
 
         # show avaival data sizes
-        print("##########################")
-        print(f"{is_train} data has ...")
-        print(f"RGB: {len(self.img_files)} files")
-        print(f"FIR: {len(self.img_files_ir)} files")
-        print(f"labes: {nf} files")
-        print("##########################")
+        msg = (
+            "##########################\n"
+            f"{is_train} data has ...\n"
+            f"RGB: {len(self.img_files)} files\n"
+            f"FIR: {len(self.img_files_ir)} files\n"
+            f"labels: {nf} files\n"
+            "##########################\n"
+        )
+        print(msg)
+        with open("share/loading_log.txt", "a+") as f:
+            f.write(msg)
 
         assert nf > 0 or n == 20288, "No labels found in %s. See %s" % (os.path.dirname(file) + os.sep, help_url)
         if not labels_loaded and n > 1000:
@@ -980,3 +994,10 @@ def create_folder(path="./new_folder"):
     if os.path.exists(path):
         shutil.rmtree(path)  # delete output folder
     os.makedirs(path)  # make new output folder
+
+
+def split_list(list: list, n: int):
+    list_size = len(list)
+    a = list_size // n
+    b = list_size % n
+    return [list[i * a + (i if i < b else b) : (i + 1) * a + (i + 1 if i < b else b)] for i in range(n)]

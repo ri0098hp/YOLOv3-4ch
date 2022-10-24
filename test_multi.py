@@ -7,7 +7,7 @@ from models import *
 from utils.datasets_multi import *
 from utils.utils import *
 
-save_folder = "share"
+save_folder = "share" + os.sep
 
 
 def test(
@@ -41,7 +41,11 @@ def test(
         # verbose = opt.task == 'test'
 
         # Remove previous
-        for f in glob.glob(save_folder + os.sep + "test_batch*.jpg"):
+        for f in (
+            glob.glob(f"{save_folder}test_batch*.jpg")
+            + glob.glob(f"{save_folder}*_curve.png")
+            + glob.glob(f"{save_folder}*_log.txt")
+        ):
             os.remove(f)
 
         # Initialize model
@@ -113,7 +117,7 @@ def test(
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     for batch_i, (imgs, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
-        imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
+        imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)
         nb, _, height, width = imgs.shape  # batch size, channels, height, width
         whwh = torch.Tensor([width, height, width, height]).to(device)
@@ -203,18 +207,18 @@ def test(
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
         # Plot images
-        if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > 10 and plot):
+        if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > batch_size * 2 and plot):
             # ground truth
-            f = save_folder + os.sep + f"test_batch{batch_i}_gt.jpg"
+            f = save_folder + f"test_batch{batch_i}_gt.jpg"
             _ = plot_images(imgs, targets, paths=paths, names=names, fname=f)
             # predict
-            f = save_folder + os.sep + f"test_batch{batch_i}_pred.jpg"
+            f = save_folder + f"test_batch{batch_i}_pred.jpg"
             _ = plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats):
-        tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plot, save_dir=save_folder, names=names)
+        tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plot, save_dir=save_folder[:-1], names=names)
         if niou > 1:
             p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
         mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
@@ -281,7 +285,7 @@ if __name__ == "__main__":
     parser.add_argument("--data", type=str, default="data/fujino.data", help="*.data path")
     parser.add_argument("--weights", type=str, default="weights/best.pt", help="weights path")
     parser.add_argument("--batch-size", type=int, default=16, help="size of each image batch")
-    parser.add_argument("--img-size", type=int, default=512, help="inference size (pixels)")
+    parser.add_argument("--img-size", type=int, default=640, help="inference size (pixels)")
     parser.add_argument("--conf-thres", type=float, default=0.001, help="object confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.6, help="IOU threshold for NMS")
     parser.add_argument("--save-json", action="store_true", help="save a cocoapi-compatible JSON results file")
@@ -294,6 +298,10 @@ if __name__ == "__main__":
     opt.cfg = check_file(opt.cfg)  # check file
     opt.data = check_file(opt.data)  # check file
     print(opt)
+    # Remove previous results
+    for f in glob.glob("test_batch*.jpg") + glob.glob("*_curve.png") + glob.glob("*_log.txt"):
+        print(f)
+        os.remove(f)
 
     # task = 'test', 'study', 'benchmark'
     if opt.task == "test":  # (default) test normally

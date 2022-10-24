@@ -34,7 +34,13 @@ save_folder = "share"
 def init_seeds(seed=0):
     random.seed(seed)
     np.random.seed(seed)
-    torch_utils.init_seeds(seed=seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # for Multi-GPU, exception safe
+    # torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 def check_git_status():
@@ -909,7 +915,7 @@ def output_to_target(output, width, height):
     targets = []
     for i, o in enumerate(output):
         if o is not None:
-            for pred in o:
+            for pred in o.cpu().numpy():
                 box = pred[:4]
                 w = (box[2] - box[0]) / width
                 h = (box[3] - box[1]) / height

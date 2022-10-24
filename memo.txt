@@ -1,10 +1,14 @@
 [train]
-python train_multi.py --epochs 1 --device 0
+python train_multi.py --epochs 100 --device 0 --batch-size 6
 
 python train_multi.py \
 --data data/test.data \
 --epochs 25 \
 --device 0
+
+python -m torch.distributed.run --nproc_per_node 2 train_multi.py --epochs 100
+
+torch.nn.parallel.DistributedDataParallel
 
 [detect]
 python detect_multi.py --weights weights/fujino_ref.pt --only-det

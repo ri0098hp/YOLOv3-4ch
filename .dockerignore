@@ -1,3 +1,6 @@
+# ignore list for building dev-image
+# *
+
 # Repo-specific DockerIgnore -------------------------------------------------------------------------------------------
 # .git
 .cache
@@ -15,11 +18,11 @@ share
 .git
 
 data/samples/*
-!data/samples/zidane.jpg
-!data/samples/bus.jpg
 **/results*.txt
 *.jpg
 *.7z
+
+
 
 # Neural Network weights -----------------------------------------------------------------------------------------------
 **/*.weights

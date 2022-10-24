@@ -115,8 +115,8 @@ def create_modules(module_defs, img_size, cfg):
                 bias[:, 4] += -4.5  # obj
                 bias[:, 5:] += math.log(0.6 / (modules.nc - 0.99))  # cls (sigmoid(p) = 1/nc)
                 module_list[j][0].bias = torch.nn.Parameter(bias_, requires_grad=bias_.requires_grad)
-            except:
-                print("WARNING: smart bias initialization failure.")
+            except Exception as e:
+                print(f"WARNING: smart bias initialization failure.\n code:{e}")
 
         else:
             print("Warning: Unrecognized Layer Type: " + mdef["type"])
