@@ -34,7 +34,13 @@ save_folder = "share"
 def init_seeds(seed=0):
     random.seed(seed)
     np.random.seed(seed)
-    torch_utils.init_seeds(seed=seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # for Multi-GPU, exception safe
+    # torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 def check_git_status():
@@ -274,7 +280,6 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
 
             # AP from recall-precision curve
             for j in range(tp.shape[1]):
-                # ap[ci, j] = compute_ap(recall[:, j], precision[:, j])
                 ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
                 if plot and j == 0:
                     py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
@@ -285,10 +290,14 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = {i: v for i, v in enumerate(names)}  # to dict
     if plot:
-        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.png", names)
-        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.png", names, ylabel="F1")
-        plot_mc_curve(px, p, Path(save_dir) / "P_curve.png", names, ylabel="Precision")
-        plot_mc_curve(px, r, Path(save_dir) / "R_curve.png", names, ylabel="Recall")
+        # with open(save_dir + os.sep + "curve_raw.txt", "w") as f:
+        #     for x, y in zip(px, py):
+        #         row =
+        #         print(x, y)
+        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.svg", names)
+        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.svg", names, ylabel="F1")
+        plot_mc_curve(px, p, Path(save_dir) / "P_curve.svg", names, ylabel="Precision")
+        plot_mc_curve(px, r, Path(save_dir) / "R_curve.svg", names, ylabel="Recall")
 
     i = f1.mean(0).argmax()  # max F1 index
     p, r, f1 = p[:, i], r[:, i], f1[:, i]
@@ -909,7 +918,7 @@ def output_to_target(output, width, height):
     targets = []
     for i, o in enumerate(output):
         if o is not None:
-            for pred in o:
+            for pred in o.cpu().numpy():  # okuda
                 box = pred[:4]
                 w = (box[2] - box[0]) / width
                 h = (box[3] - box[1]) / height
@@ -984,7 +993,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
         w = math.ceil(scale_factor * w)
 
     # Empty array for output
-    mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)
+    mosaic = np.full((int(ns * h), int(ns * w), 4), 255, dtype=np.uint8)
 
     # Fix class - colour map
     prop_cycle = plt.rcParams["axes.prop_cycle"]
@@ -1003,11 +1012,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
         if scale_factor < 1:
             img = cv2.resize(img, (w, h))
 
-        if img.shape[2] == 4:
-            ir, b, g, r = cv2.split(img)
-            img = cv2.merge((b, g, r))
-            # img = cv2.cvtColor(ir, cv2.COLOR_GRAY2BGR)  # if you want FIR gt and pred image
-        mosaic[block_y : block_y + h, block_x : block_x + w, :] = img[:, :, :3]
+        mosaic[block_y : block_y + h, block_x : block_x + w, :] = img[:, :, :4]
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
@@ -1037,17 +1042,23 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
                 (block_x + 5, block_y + t_size[1] + 5),
                 0,
                 tl / 3,
-                [220, 220, 220],
+                [220, 220, 220, 220],
                 thickness=tf,
                 lineType=cv2.LINE_AA,
             )
 
         # Image border
-        cv2.rectangle(mosaic, (block_x, block_y), (block_x + w, block_y + h), (255, 255, 255), thickness=3)
+        cv2.rectangle(mosaic, (block_x, block_y), (block_x + w, block_y + h), (255, 255, 255, 255), thickness=1)
 
     if fname is not None:
         mosaic = cv2.resize(mosaic, (int(ns * w * 0.5), int(ns * h * 0.5)), interpolation=cv2.INTER_AREA)
-        cv2.imwrite(fname, cv2.cvtColor(mosaic, cv2.COLOR_BGR2RGB))
+        if mosaic.shape[2] == 4:
+            mosaic_ir, b, g, r = cv2.split(mosaic)
+            mosaic = cv2.merge((r, g, b))
+            cv2.imwrite(fname[:-4] + "_rgb.jpg", mosaic)
+            cv2.imwrite(fname[:-4] + "_fir.jpg", mosaic_ir)
+        else:
+            cv2.imwrite(fname, cv2.cvtColor(mosaic, cv2.COLOR_BGR2RGB))
     return mosaic
 
 
@@ -1217,7 +1228,7 @@ def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
     else:
         ax.plot(px, py, linewidth=1, color="grey")  # plot(recall, precision)
 
-    ax.plot(px, py.mean(1), linewidth=3, color="blue", label="all classes %.3f mAP@0.5" % ap[:, 0].mean())
+    ax.plot(px, py.mean(1), linewidth=3, color="blue", label=f"all classes {ap[:, 0].mean():.3f} mAP@0.5")
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_xlim(0, 1)

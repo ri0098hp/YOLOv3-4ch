@@ -20,8 +20,8 @@ except Exception:
 wdir = "weights" + os.sep  # weights dir
 last = wdir + "last.pt"
 best = wdir + "best.pt"
-save_fodler = "share"
-results_file = save_fodler + os.sep + "results.txt"
+save_folder = "share" + os.sep
+results_file = save_folder + os.sep + "results.txt"
 
 # Hyperparameters
 hyp = {
@@ -91,7 +91,12 @@ def train(hyp):
     hyp["cls"] *= nc / 80  # update coco-tuned hyp['cls'] to current dataset
 
     # Remove previous results
-    for f in glob.glob("*_batch*.jpg") + glob.glob(results_file):
+    for f in (
+        glob.glob(f"{save_folder}*_batch*.jpg")
+        + glob.glob(results_file)
+        + glob.glob(f"{save_folder}*_curve.png")
+        + glob.glob(f"{save_folder}*_log.txt")
+    ):
         os.remove(f)
 
     # Initialize model
@@ -291,7 +296,7 @@ def train(hyp):
         # batch -------------------------------------------------------------
         for i, (imgs, targets, paths, _) in pbar:
             ni = i + nb * epoch  # number integrated batches (since train start)
-            imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
+            imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0 - 255 to 0.0 - 1.0
             targets = targets.to(device)
 
             # Burn-in
@@ -345,8 +350,8 @@ def train(hyp):
             pbar.set_description(s)
 
             # Plot
-            if ni < 1:
-                f = save_folder + os.sep + f"train_batch{i}.jpg"
+            if ni == 61:
+                f = save_folder + f"train_batch{i}.jpg"
                 if os.path.isfile(f):
                     os.remove(f)
                 _ = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
@@ -464,11 +469,11 @@ def train(hyp):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=200)  # 500200 batches at bs 16, 117263 COCO images = 273 epochs
-    parser.add_argument("--batch-size", type=int, default=16)  # effective bs = batch_size * accumulate = 16 * 4 = 64
+    parser.add_argument("--batch-size", type=int, default=4)  # effective bs = batch_size * accumulate = 16 * 4 = 64
     parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
     parser.add_argument("--data", type=str, default="data/fujino.data", help="*.data path")
     parser.add_argument("--multi-scale", action="store_true", help="adjust (67%% - 150%%) img_size every 10 batches")
-    parser.add_argument("--img-size", nargs="+", type=int, default=[640, 640], help="[min_train, max-train, test]")
+    parser.add_argument("--img-size", nargs="+", type=int, default=[640, 640, 640], help="[min, max-train, test]")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
     parser.add_argument("--resume", action="store_true", help="resume training from last.pt")
     parser.add_argument("--nosave", action="store_true", help="only save final checkpoint")
