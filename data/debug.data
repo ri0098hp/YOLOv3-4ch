@@ -1,0 +1,6 @@
+classes=1
+data_path=../dataset/debug
+rgb_folder=RGB
+fir_folder=FIR
+labels_folder=FIR_labels
+names=data/debug-dataset/debug.names

@@ -274,26 +274,37 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
             dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
 
-            fs = []
-            for dir in dirs:
-                f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
-                f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
-                f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
-
-                # train と test の振り分け
-                spl = split_list(f, 10)
-                try:
-                    d = int(re.sub(r"\D", "", dir))
-                except Exception:
-                    d = ord(dir[0])
-                idx_val = list(map(lambda x: (x + d) % 10, [3, 5, 9]))
-                idx_train = list(map(lambda x: (x + d) % 10, [0, 1, 2, 4, 6, 7, 8]))
+            if "kaist-dataset" in dirs[0]:
                 if is_train == "train":
-                    for id in idx_train:
-                        fs += spl[id]
+                    dir = dirs[0]
                 else:
-                    for id in idx_val:
-                        fs += spl[id]
+                    dir = dirs[1]
+                fs = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
+                fs = [x for x in fs if os.path.splitext(x)[-1].lower() in img_formats]
+                fs.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
+            else:
+                fs = []
+                for dir in dirs:
+                    f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
+                    f = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+                    f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
+
+                    # train と test の振り分け
+                    spl = split_list(f, 10)
+                    idx_train = [0, 1, 2, 4, 6, 7, 8]
+                    idx_val = [3, 5, 9]
+                    try:
+                        d = int(re.sub(r"\D", "", dir))
+                    except Exception:
+                        d = ord(dir[0])
+                    idx_train = list(map(lambda x: (x + d) % 10, idx_train))
+                    idx_val = list(map(lambda x: (x + d) % 10, idx_val))
+                    if is_train == "train":
+                        for id in idx_train:
+                            fs += spl[id]
+                    else:
+                        for id in idx_val:
+                            fs += spl[id]
 
             # self.img_files = random.sample(fs, len(fs)) # slide data
             self.img_files = fs
@@ -628,7 +639,6 @@ def load_image_multi(self, index):
     if img is None:
         path_rgb = self.img_files[index]
         path_ir = self.img_files_ir[index]
-
         img_rgb = cv2.imread(path_rgb)  # reading rgb
         img_ir = cv2.imread(path_ir, 0)  # reading grayscale
         img = cv2.merge((img_rgb, img_ir))  # combine rgb + ir

@@ -40,14 +40,6 @@ def test(
         # device = torch_utils.select_device(opt.device, batch_size=batch_size)
         # verbose = opt.task == 'test'
 
-        # Remove previous
-        for f in (
-            glob.glob(f"{save_folder}test_batch*.jpg")
-            + glob.glob(f"{save_folder}*_curve.png")
-            + glob.glob(f"{save_folder}*_log.txt")
-        ):
-            os.remove(f)
-
         # Initialize model
         model = Darknet(cfg, imgsz)
 
@@ -207,7 +199,8 @@ def test(
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
         # Plot images
-        if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > batch_size * 2 and plot):
+        # if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > batch_size * 2 and plot):
+        if batch_i == 1 or batch_i == 183:  # 183 or #130
             # ground truth
             f = save_folder + f"test_batch{batch_i}_gt.jpg"
             _ = plot_images(imgs, targets, paths=paths, names=names, fname=f)
@@ -227,10 +220,15 @@ def test(
         nt = torch.zeros(1)
 
     # Print results
-    pf = "%20s" + "%10.3g" * 6
-    print(pf % ("all", seen, nt.sum(), mp, mr, map, mf1))
-    pf = "%20s" + "%10.3g" * 2
-    print(pf % ("TP, FP", tp, fp))
+    with open(save_folder + "test_results.txt", "w") as f:
+        pf = ("%20s" + "%10s" * 6) % ("Class", "Images", "Targets", "P", "R", "mAP@0.5", "F1")
+        print(pf, file=f)
+        pf = ("%20s" + "%10.3g" * 6) % ("all", seen, nt.sum(), mp, mr, map, mf1)
+        print(pf)
+        print(pf, file=f)
+        pf = ("%20s" + "%10.3g" * 2) % ("TP, FP", tp, fp)
+        print(pf)
+        print(pf, file=f)
 
     # Print results per class
     if verbose and nc > 1 and len(stats):
@@ -299,13 +297,16 @@ if __name__ == "__main__":
     opt.data = check_file(opt.data)  # check file
     print(opt)
     # Remove previous results
-    for f in glob.glob("test_batch*.jpg") + glob.glob("*_curve.png") + glob.glob("*_log.txt"):
-        print(f)
+    for f in (
+        glob.glob(f"{save_folder}test_batch*.jpg")
+        + glob.glob(f"{save_folder}*_curve.svg")
+        + glob.glob(f"{save_folder}*_log.txt")
+    ):
         os.remove(f)
 
     # task = 'test', 'study', 'benchmark'
     if opt.task == "test":  # (default) test normally
-        test(
+        results, maps = test(
             opt.cfg,
             opt.data,
             opt.weights,
@@ -317,6 +318,7 @@ if __name__ == "__main__":
             opt.single_cls,
             opt.augment,
             plot=True,
+            device=opt.device,
         )
 
     elif opt.task == "benchmark":  # mAPs at 256-640 at conf 0.5 and 0.7
