@@ -7,7 +7,7 @@ from models import *
 from utils.datasets_multi import *
 from utils.utils import *
 
-save_folder = "share" + os.sep
+save_folder = os.path.join("share", "test", "")
 
 
 def test(
@@ -109,6 +109,8 @@ def test(
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     for batch_i, (imgs, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+        if batch_i != 50:  # manual
+            continue
         imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)
         nb, _, height, width = imgs.shape  # batch size, channels, height, width
@@ -198,15 +200,15 @@ def test(
             # Append statistics (correct, conf, pcls, tcls)
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
-        # Plot images
-        # if batch_i == 0 or (batch_i % 2 == 0 and len(targets) > batch_size * 2 and plot):
-        if batch_i == 1 or batch_i == 183:  # 183 or #130
-            # ground truth
-            f = save_folder + f"test_batch{batch_i}_gt.jpg"
-            _ = plot_images(imgs, targets, paths=paths, names=names, fname=f)
-            # predict
-            f = save_folder + f"test_batch{batch_i}_pred.jpg"
-            _ = plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
+            # Plot images
+            # if len(targets) > 20 and plot:
+            if batch_i == 104:
+                # ground truth
+                f = save_folder + f"test_batch{batch_i}_gt.jpg"
+                _ = plot_images(imgs, targets, paths=paths, names=names, fname=f)
+                # predict
+                f = save_folder + f"test_batch{batch_i}_pred.jpg"
+                _ = plot_images(imgs, output_to_target(output, width, height), paths=paths, names=names, fname=f)
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
@@ -280,7 +282,7 @@ def test(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="test.py")
     parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
-    parser.add_argument("--data", type=str, default="data/fujino.data", help="*.data path")
+    parser.add_argument("--data", type=str, default="data/fujinolab-all.data", help="*.data path")
     parser.add_argument("--weights", type=str, default="weights/best.pt", help="weights path")
     parser.add_argument("--batch-size", type=int, default=16, help="size of each image batch")
     parser.add_argument("--img-size", type=int, default=640, help="inference size (pixels)")
@@ -303,7 +305,7 @@ if __name__ == "__main__":
         + glob.glob(f"{save_folder}*_log.txt")
     ):
         os.remove(f)
-
+    os.makedirs(save_folder, exist_ok=True)
     # task = 'test', 'study', 'benchmark'
     if opt.task == "test":  # (default) test normally
         results, maps = test(

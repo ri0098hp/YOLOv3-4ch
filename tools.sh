@@ -30,6 +30,7 @@ while getopts "abdersh" optKey; do
     r)
       docker run --name YOLOv3-4ch --gpus all -it --shm-size=8g --ipc=host \
       --mount type=bind,source="$(pwd)"/data,target=/usr/src/app/data \
+      --mount type=bind,source="$(pwd)"/dataset,target=/usr/src/app/dataset \
       --mount type=bind,source="$(pwd)"/cfg,target=/usr/src/app/cfg \
       --mount type=bind,source="$(pwd)"/weights,target=/usr/src/app/weights \
       --mount type=bind,source="$(pwd)"/share,target=/usr/src/app/share \

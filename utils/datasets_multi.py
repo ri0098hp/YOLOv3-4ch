@@ -72,6 +72,7 @@ class LoadImages:  # for inference
             nI = len(images_RGB)
             self.img_RGB = images_RGB
             self.img_IR = images_IR
+            print(len(self.img_RGB), len(self.img_IR))
         else:
             images = [x for x in files if os.path.splitext(x)[-1].lower() in img_formats]
             nI = len(images)
@@ -103,8 +104,6 @@ class LoadImages:  # for inference
         if self.nchannel == 4:
             path_RGB = self.img_RGB[self.count]
             path_IR = self.img_IR[self.count]
-            # print("path inside", path_RGB)
-            # print("path inside", path_IR)
         else:
             path = self.files[self.count]
 
@@ -135,6 +134,7 @@ class LoadImages:  # for inference
                 img_ir = cv2.imread(path_IR, 0)
 
                 # merge the file for 4 channel
+                print(img_rgb.shape, img_ir.shape)
                 img0 = cv2.merge((img_rgb, img_ir))
             else:
                 img0 = cv2.imread(path)  # BGR / 3 channel
@@ -274,7 +274,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
             dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
 
-            if "kaist-dataset" in dirs[0]:
+            if "kaist" in dirs[0]:
                 if is_train == "train":
                     dir = dirs[0]
                 else:
@@ -293,6 +293,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     spl = split_list(f, 10)
                     idx_train = [0, 1, 2, 4, 6, 7, 8]
                     idx_val = [3, 5, 9]
+                    # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
                     try:
                         d = int(re.sub(r"\D", "", dir))
                     except Exception:
@@ -495,7 +496,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             "##########################\n"
         )
         print(msg)
-        with open("share/loading_log.txt", "a+") as f:
+        save_folder = os.path.join("share", is_train, "")
+        with open(save_folder + "loading_log.txt", "a+") as f:
             f.write(msg)
 
         assert nf > 0 or n == 20288, "No labels found in %s. See %s" % (os.path.dirname(file) + os.sep, help_url)

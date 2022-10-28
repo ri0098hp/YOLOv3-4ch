@@ -1034,7 +1034,9 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
 
         # Draw image filename labels
         if paths is not None:
-            label = os.path.basename(paths[i])[:40]  # trim to 40 char
+            path = paths[i].split(os.sep)
+            label = path[-3] + os.sep + path[-1]
+            label = label[:40]  # trim to 40 char
             t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
             cv2.putText(
                 mosaic,

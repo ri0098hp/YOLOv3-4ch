@@ -1,6 +1,0 @@
-classes=1
-data_path=../dataset/fujino-all
-rgb_folder=RGB
-fir_folder=FIR
-labels_folder=FIR_labels
-names=data/fujino-dataset/fujino.names
