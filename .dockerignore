@@ -1,37 +1,28 @@
-# ignore list for building dev-image
-# *
-
 # Repo-specific DockerIgnore -------------------------------------------------------------------------------------------
-# .git
+#.git
 .cache
 .idea
 runs
 output
 coco
-label_transform
-weights
 storage.googleapis.com
-data
-cfg
-share
-.git
 
-dataset
 data/samples/*
-**/results*.txt
+**/results*.csv
 *.jpg
-*.7z
-
-
 
 # Neural Network weights -----------------------------------------------------------------------------------------------
-**/*.weights
 **/*.pt
+**/*.pth
 **/*.onnx
 **/*.mlmodel
-**/darknet53.conv.74
-**/yolov3-tiny.conv.15
-
+**/*.torchscript
+**/*.torchscript.pt
+**/*.tflite
+**/*.h5
+**/*.pb
+*_saved_model/
+*_web_model/
 
 # Below Copied From .gitignore -----------------------------------------------------------------------------------------
 # Below Copied From .gitignore -----------------------------------------------------------------------------------------
@@ -62,6 +53,7 @@ sdist/
 var/
 wheels/
 *.egg-info/
+wandb/
 .installed.cfg
 *.egg
 
@@ -123,9 +115,9 @@ celerybeat-schedule
 .env
 
 # virtualenv
-.venv
-venv/
-ENV/
+.venv*
+venv*/
+ENV*/
 
 # Spyder project settings
 .spyderproject

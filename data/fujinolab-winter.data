@@ -1,6 +1,0 @@
-classes=1
-data_path=dataset/fujinolab-winter
-rgb_folder=RGB_crop
-fir_folder=FIR
-labels_folder=FIR_labels
-names=dataset/default.names

@@ -1,38 +1,18 @@
+# YOLOv3 🚀 by Ultralytics, GPL-3.0 license
+
 # Start FROM Nvidia PyTorch image https://ngc.nvidia.com/catalog/containers/nvidia:pytorch
-# FROM nvcr.io/nvidia/pytorch:20.08-py3
-FROM nvcr.io/nvidia/pytorch:20.03-py3
+FROM nvcr.io/nvidia/pytorch:21.10-py3
 
 # Install linux packages
 RUN apt update && apt install -y zip htop screen libgl1-mesa-glx
 
-# Install dependencies (pip or conda)
-# COPY requirements.txt .
+# Install python dependencies
+COPY requirements.txt .
 RUN python -m pip install --upgrade pip
-RUN pip install -U gsutil
-# RUN pip install -U -r requirements.txt
-# RUN conda update -n base -c defaults conda
-# RUN conda install -y -c anaconda future numpy opencv matplotlib tqdm pillow
-# RUN conda install -y -c conda-forge scikit-image tensorboard pycocotools
-
-## Install OpenCV with Gstreamer support
-#WORKDIR /usr/src
-#RUN pip uninstall -y opencv-python
-#RUN apt-get update
-#RUN apt-get install -y gstreamer1.0-tools gstreamer1.0-python3-dbg-plugin-loader libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
-#RUN git clone https://github.com/opencv/opencv.git && cd opencv && git checkout 4.1.1 && mkdir build
-#RUN git clone https://github.com/opencv/opencv_contrib.git && cd opencv_contrib && git checkout 4.1.1
-#RUN cd opencv/build && cmake ../ \
-#    -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-#    -D BUILD_OPENCV_PYTHON3=ON \
-#    -D PYTHON3_EXECUTABLE=/opt/conda/bin/python \
-#    -D PYTHON3_INCLUDE_PATH=/opt/conda/include/python3.6m \
-#    -D PYTHON3_LIBRARIES=/opt/conda/lib/python3.6/site-packages \
-#    -D WITH_GSTREAMER=ON \
-#    -D WITH_FFMPEG=OFF \
-#    && make && make install && ldconfig
-#RUN cd /usr/local/lib/python3.6/site-packages/cv2/python-3.6/ && mv cv2.cpython-36m-x86_64-linux-gnu.so cv2.so
-#RUN cd /opt/conda/lib/python3.6/site-packages/ && ln -s /usr/local/lib/python3.6/site-packages/cv2/python-3.6/cv2.so cv2.so
-#RUN python3 -c "import cv2; print(cv2.getBuildInformation())"
+RUN pip uninstall -y nvidia-tensorboard nvidia-tensorboard-plugin-dlprof
+RUN pip install --no-cache -r requirements.txt coremltools onnx gsutil notebook wandb>=0.12.2
+RUN pip install --no-cache -U torch torchvision numpy Pillow
+# RUN pip install --no-cache torch==1.10.0+cu113 torchvision==0.11.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
 
 # Create working directory
 RUN mkdir -p /usr/src/app
@@ -41,28 +21,41 @@ WORKDIR /usr/src/app
 # Copy contents
 COPY . /usr/src/app
 
-# Copy weights
-#RUN python3 -c "from models import *; \
-#attempt_download('weights/yolov3.pt'); \
-#attempt_download('weights/yolov3-spp.pt')"
+# Downloads to user config dir
+ADD https://ultralytics.com/assets/Arial.ttf /root/.config/Ultralytics/
+
+# Set environment variables
+# ENV HOME=/usr/src/app
 
 
-# ---------------------------------------------------  Extras Below  ---------------------------------------------------
+# Usage Examples -------------------------------------------------------------------------------------------------------
 
 # Build and Push
-# t=ultralytics/yolov3:v0 && sudo docker build -t $t . && sudo docker push $t
+# t=ultralytics/yolov3:latest && sudo docker build -t $t . && sudo docker push $t
 
-# Run
-# t=ultralytics/yolov3:v0 && sudo docker pull $t && sudo docker run -it --gpus all --ipc=host $t bash
+# Pull and Run
+# t=ultralytics/yolov3:latest && sudo docker pull $t && sudo docker run -it --ipc=host --gpus all $t
 
 # Pull and Run with local directory access
-# t=ultralytics/yolov3:v0 && sudo docker pull $t && sudo docker run -it --gpus all --ipc=host -v "$(pwd)"/coco:/usr/src/coco $t bash
+# t=ultralytics/yolov3:latest && sudo docker pull $t && sudo docker run -it --ipc=host --gpus all -v "$(pwd)"/datasets:/usr/src/datasets $t
 
 # Kill all
-# sudo docker kill "$(sudo docker ps -q)"
+# sudo docker kill $(sudo docker ps -q)
 
 # Kill all image-based
-# sudo docker kill $(sudo docker ps -a -q --filter ancestor=ultralytics/yolov3:v0)
+# sudo docker kill $(sudo docker ps -qa --filter ancestor=ultralytics/yolov3:latest)
 
-# Run bash for loop
-# sudo docker run --gpus all --ipc=host ultralytics/yolov3:v0 while true; do python3 train.py --evolve; done
+# Bash into running container
+# sudo docker exec -it 5a9b5863d93d bash
+
+# Bash into stopped container
+# id=$(sudo docker ps -qa) && sudo docker start $id && sudo docker exec -it $id bash
+
+# Clean up
+# docker system prune -a --volumes
+
+# Update Ubuntu drivers
+# https://www.maketecheasier.com/install-nvidia-drivers-ubuntu/
+
+# DDP test
+# python -m torch.distributed.run --nproc_per_node 2 --master_port 1 train.py --epochs 3
