@@ -14,31 +14,33 @@ EOM
 while getopts "abdersh" optKey; do
   case "$optKey" in
     a)
-      docker start -a YOLOv3-4ch
+      docker start -a YOLOv3-okuda
       ;;
     b)
-      docker build -t yolov3-4ch:latest .
+      docker build -t yolov3-okuda:latest .
       ;;
     d)
-      docker run --name YOLOv3-4ch-debug --gpus all -it --shm-size=12g --ipc=host --rm \
+      docker run --name YOLOv3-okuda-debug --gpus all -it --shm-size=12g --ipc=host --rm \
       --mount type=bind,source="$(pwd)",target=/usr/src/app/ \
-      yolov3-4ch:test
+      --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
+      yolov3-okuda:test
       ;;
     e)
-      docker start -i YOLOv3-4ch
+      docker start -i YOLOv3-okuda
       ;;
     r)
-      docker run --name YOLOv3-4ch --gpus all -it --shm-size=8g --ipc=host \
+      docker run --name YOLOv3-okuda --gpus all -it --shm-size=12g --ipc=host \
       --mount type=bind,source="$(pwd)"/data,target=/usr/src/app/data \
       --mount type=bind,source="$(pwd)"/dataset,target=/usr/src/app/dataset \
-      --mount type=bind,source="$(pwd)"/cfg,target=/usr/src/app/cfg \
       --mount type=bind,source="$(pwd)"/weights,target=/usr/src/app/weights \
       --mount type=bind,source="$(pwd)"/share,target=/usr/src/app/share \
       --mount type=bind,source="$(pwd)"/runs,target=/usr/src/app/runs \
-      yolov3-4ch
+      --mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \
+      --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
+      yolov3-okuda
       ;;
     s)
-      docker rm YOLOv3-4ch
+      docker rm YOLOv3-okuda
       ;;
     '-h'|'--help'|* )
       usage

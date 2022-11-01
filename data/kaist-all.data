@@ -1,6 +1,0 @@
-classes=1
-data_path=dataset/kaist-all
-rgb_folder=RGB
-fir_folder=FIR
-labels_folder=FIR_labels
-names=dataset/default.names

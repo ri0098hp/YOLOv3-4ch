@@ -1,19 +1,7 @@
-[train]
-python train_multi.py --epochs 100
+# train
+  python train.py --data data/fujinolab-all.yaml --batch-size 12
 
-python train_multi.py \
---data data/test.data \
---epochs 25 \
---device 0
-
-python -m torch.distributed.run --nproc_per_node 2 train_multi.py --epochs 100
-
-torch.nn.parallel.DistributedDataParallel
-
-[detect]
-python detect_multi.py --weights weights/fujino_ref.pt --only-det
-
-[test]
-python test_multi.py --weights weights/fujino_ref.pt
-
-pgrep python | xargs kill -9
+  # multi gpu training
+    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --data data/fujinolab-all.yaml --device 0,1
+  # with sync batch norm --sync-bn
+    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --data data/fujinolab-all.yaml --device 0,1
