@@ -86,7 +86,7 @@ def check_font(font="Arial.ttf", size=10):
     font = font if font.exists() else (CONFIG_DIR / font.name)
     try:
         return ImageFont.truetype(str(font) if font.exists() else font.name, size)
-    except Exception as e:  # download if missing
+    except Exception:  # download if missing
         url = "https://ultralytics.com/assets/" + font.name
         print(f"Downloading {url} to {font}...")
         torch.hub.download_url_to_file(url, str(font), progress=False)
@@ -115,7 +115,7 @@ class Annotator:
             self.im = im
         self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
 
-    def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
+    def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255, 255)):
         # Add one xyxy box to image with label
         if self.pil or not is_ascii(label):
             self.draw.rectangle(box, width=self.lw, outline=color)  # box
@@ -239,15 +239,13 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
 
     # Build Image
     nchannel = images[0].shape[0]
-    if nchannel > 3:
-        nch = 6
-    mosaic = np.full((int(ns * h), int(ns * w), nch), 255, dtype=np.uint8)  # init
+    mosaic = np.full((int(ns * h), int(ns * w), nchannel), 255, dtype=np.uint8)  # init
     # add okuda: color for multi channels
-    box_color = (0, 0, 0)
-    txt_color = (220, 220, 220)
+    grid_color = (0, 0, 0)
+    txt_color = (255, 255, 255)
     if nchannel == 4:
-        box_color += (0,)
-        txt_color += (220,)
+        grid_color += (0,)
+        txt_color += (255,)
 
     for i, im in enumerate(images):
         if i == max_subplots:  # if last batch has fewer images than we expect
@@ -268,7 +266,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
     annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True)
     for i in range(i + 1):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
-        annotator.rectangle([x, y, x + w, y + h], None, box_color, width=2)  # borders
+        annotator.rectangle([x, y, x + w, y + h], None, grid_color, width=2)  # borders
         if paths:
             annotator.text((x + 5, y + 5 + h), text=Path(paths[i]).name[:40], txt_color=txt_color)  # filenames
         if len(targets) > 0:
@@ -288,11 +286,11 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
             boxes[[1, 3]] += y
             for j, box in enumerate(boxes.T.tolist()):
                 cls = classes[j]
-                color = colors(cls)
+                color = (0,) + colors(cls) if nchannel == 4 else colors(cls)
                 cls = names[cls] if names else cls
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = f"{cls}" if labels else f"{cls} {conf[j]:.1f}"
-                    annotator.box_label(box, label, color=color)
+                    annotator.box_label(box, label, color=color, txt_color=txt_color)
 
     # add okuda : multi channels img save
     if nchannel == 4:

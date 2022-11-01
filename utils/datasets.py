@@ -467,14 +467,13 @@ class LoadImagesAndLabels(Dataset):
             # loading RGB images
             dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
             dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
-
             if "kaist" in dirs[0]:
                 if is_train == "train":
                     dir = dirs[0]
                 else:
                     dir = dirs[1]
                 fs = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
-                fs = [x for x in fs if os.path.splitext(x)[-1].lower() in IMG_FORMATS]
+                fs = [x for x in fs if x.split(".")[-1].lower() in IMG_FORMATS]
                 fs.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
             else:
                 fs = []
@@ -527,14 +526,13 @@ class LoadImagesAndLabels(Dataset):
                 self.label_files.append(f.replace(os.path.splitext(x)[-1], ".txt"))
 
         # Check cache - data_pathの直下にcacheフォルダ作成
-        cache_path = os.path.join(str(Path(self.label_files[0]).parents[2]), "cache", f"{is_train}_labels.npy")
+        cache_path = os.path.join(path, "cache", f"{is_train}_labels.npy")
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
             assert cache["version"] == self.cache_version  # same version
             assert cache["hash"] == get_hash(self.label_files + self.img_files)  # same hash
         except Exception:
             cache, exists = self.cache_labels(Path(cache_path), prefix), False  # cache
-
         # Display cache
         nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupted, total
         if exists:
@@ -622,7 +620,7 @@ class LoadImagesAndLabels(Dataset):
         # Cache dataset labels, check images and read shapes
         x = {}  # dict
         nm, nf, ne, nc, msgs = 0, 0, 0, 0, []  # number missing, found, empty, corrupt, messages
-        desc = f"{prefix}Scanning '{path.parent / path.stem}' images and labels..."
+        desc = f"{prefix}Scanning '{path.parent / path.stem}' labels..."
         with Pool(NUM_THREADS) as pool:
             pbar = tqdm(
                 pool.imap(verify_image_label, zip(self.img_files, self.label_files, repeat(prefix))),
@@ -651,7 +649,7 @@ class LoadImagesAndLabels(Dataset):
         x["version"] = self.cache_version  # cache version
         try:
             np.save(path, x)  # save cache for next time
-            path.with_suffix(".cache.npy").rename(path)  # remove .npy suffix
+            # path.with_suffix(".cache.npy").rename(path)  # remove .npy suffix
             LOGGER.info(f"{prefix}New cache created: {path}")
         except Exception as e:
             LOGGER.warning(f"{prefix}WARNING: Cache directory {path.parent} is not writeable: {e}")  # not writeable

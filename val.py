@@ -100,7 +100,6 @@ def process_batch(detections, labels, iouv):
 
 @torch.no_grad()
 def run(
-    cfg=None,
     data=None,
     weights=None,  # model.pt path(s)
     batch_size=32,  # batch size
@@ -143,8 +142,8 @@ def run(
         (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
         # Load model
-        # model = DetectMultiBackend(weights, device=device, dnn=dnn)
-        model = Darknet(cfg, imgsz)
+        model = DetectMultiBackend(weights, device=device, dnn=dnn)
+        # model = Darknet(cfg, imgsz)
         stride, pt = model.stride, model.pt
         imgsz = check_img_size(imgsz, s=stride)  # check image size
         half &= pt and device.type != "cpu"  # half precision only supported by PyTorch on CUDA
@@ -161,7 +160,8 @@ def run(
 
     # Configure
     model.eval()
-    is_coco = isinstance(data.get("val"), str) and data["val"].endswith("coco/val2017.txt")  # COCO dataset
+    # is_coco = isinstance(data.get("val"), str) and data["val"].endswith("coco/val2017.txt")  # COCO dataset
+    is_coco = False
     nc = 1 if single_cls else int(data["nc"])  # number of classes
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
@@ -169,11 +169,25 @@ def run(
     # Dataloader
     if not training:
         if pt and device.type != "cpu":
-            model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
+            # model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
+            model(torch.zeros(1, 4, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
         pad = 0.0 if task == "speed" else 0.5
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
+        nchannels = 4
         dataloader = create_dataloader(
-            data[task], imgsz, batch_size, stride, single_cls, pad=pad, rect=pt, prefix=colorstr(f"{task}: ")
+            "test",
+            data["data_path"],
+            data["rgb_folder"],
+            data["fir_folder"],
+            data["labels_folder"],
+            nchannels,
+            imgsz,
+            batch_size,
+            stride,
+            single_cls,
+            pad=pad,
+            rect=pt,
+            prefix=colorstr(f"{task}: "),
         )[0]
 
     seen = 0
@@ -185,6 +199,7 @@ def run(
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     pbar = tqdm(dataloader, desc=s, ncols=NCOLS, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}")  # progress bar
+    plot_num = 0
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         t1 = time_sync()
         if pt:
@@ -250,7 +265,8 @@ def run(
             callbacks.run("on_val_image_end", pred, predn, path, names, im[si])
 
         # Plot images
-        if plots and batch_i < 3:
+        if plots and plot_num < 1 and (batch_i == 0 or len(targets) > 20):  # 推測と正解ラベル数が計20以上
+            plot_num += 1
             f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
             Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
             f = save_dir / f"val_batch{batch_i}_pred.jpg"  # predictions
@@ -325,8 +341,7 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cfg", type=str, default="cfg/yolov3-spp-1cls-4channel.cfg", help="*.cfg path")
-    parser.add_argument("--data", type=str, default=ROOT / "data/debug.yaml", help="dataset.yaml path")
+    parser.add_argument("--data", type=str, default=ROOT / "data/fujinolab-all.yaml", help="dataset.yaml path")
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov3.pt", help="model.pt path(s)")
     parser.add_argument("--batch-size", type=int, default=32, help="batch size")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="inference size (pixels)")
@@ -334,7 +349,7 @@ def parse_opt():
     parser.add_argument("--iou-thres", type=float, default=0.6, help="NMS IoU threshold")
     parser.add_argument("--task", default="val", help="train, val, test, speed or study")
     parser.add_argument("--device", default="", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
-    parser.add_argument("--single-cls", action="store_true", help="treat as single-class dataset")
+    parser.add_argument("--single-cls", action="store_false", help="treat as single-class dataset")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     parser.add_argument("--verbose", action="store_true", help="report mAP by class")
     parser.add_argument("--save-txt", action="store_true", help="save results to *.txt")

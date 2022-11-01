@@ -136,7 +136,6 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
     nc = 1 if single_cls else int(data_dict["nc"])  # number of classes
     names = ["item"] if single_cls and len(data_dict["names"]) != 1 else data_dict["names"]  # class names
     assert len(names) == nc, f"{len(names)} names found for nc={nc} dataset in {data}"  # check
-    # is_coco = isinstance(val_path, str) and val_path.endswith("coco/val2017.txt")  # COCO dataset
     is_coco = None
 
     # Model
@@ -528,8 +527,8 @@ def parse_opt(known=False):
     parser.add_argument("--cfg", type=str, default="models/yolov3-spp-1cls-4ch.yaml", help="model.yaml path")
     parser.add_argument("--data", type=str, default="data/debug.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/default.yaml", help="hyperparameters path")
-    parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--batch-size", type=int, default=12, help="total batch size for all GPUs, -1 for autobatch")
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--batch-size", type=int, default=-1, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
     parser.add_argument("--resume", nargs="?", const=True, default=False, help="resume most recent training")
