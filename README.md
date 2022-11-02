@@ -11,7 +11,7 @@ YOLOv3 をRGB-FIR向けに拡張したもの
 0. 必要に応じてCUDA Tool Kitを入れる.
 1. cloneする.
   ```bash
-  git clone git@github.com:ri0098hp/yolov3-4ch.git
+  git clone git@github.com:ri0098hp/YOLOv3-4ch.git
   ```
 
 2. yolov3-4chのフォルダを開きdocker imageをbuildする. 容量は13GBくらいなのでそこそこ時間がかかる.
@@ -68,7 +68,7 @@ wandb off
   ### 起動
   次のコマンドを実行.
   ```bash
-  ./tools.sh -b
+  ./tools.sh -r
   ```
 
   ### データセットの準備
