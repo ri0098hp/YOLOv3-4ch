@@ -27,18 +27,8 @@ from torch.utils.data import DataLoader, Dataset, dataloader, distributed
 from tqdm import tqdm
 
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
-from utils.general import (
-    LOGGER,
-    check_dataset,
-    check_requirements,
-    check_yaml,
-    clean_str,
-    segments2boxes,
-    xyn2xy,
-    xywh2xyxy,
-    xywhn2xyxy,
-    xyxy2xywhn,
-)
+from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
+                           xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
 
 # Parameters
@@ -206,24 +196,37 @@ class _RepeatSampler:
 
 class LoadImages:
     #  image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
-    def __init__(self, path, img_size=640, stride=32, auto=True):
-        p = str(Path(path).resolve())  # os-agnostic absolute path
-        if "*" in p:
-            files = sorted(glob.glob(p, recursive=True))  # glob
-        elif os.path.isdir(p):
-            files = sorted(glob.glob(os.path.join(p, "*.*")))  # dir
-        elif os.path.isfile(p):
-            files = [p]  # files
+    def __init__(self, path, nchannel=3, img_size=640, stride=32, auto=True):
+        path = str(Path(path))  # os-agnostic
+        files = []
+        if os.path.isdir(path):
+            if nchannel == 4:
+                RGB_file = sorted(glob.glob(os.path.join(path, "RGB", "*.*")))
+                IR_file = sorted(glob.glob(os.path.join(path, "FIR", "*.*")))
+            else:
+                files = sorted(glob.glob(os.path.join(path, "*.*")))
+        elif os.path.isfile(path):
+            files = [path]
         else:
-            raise Exception(f"ERROR: {p} does not exist")
+            raise ValueError(f"{path} is not existing")
 
-        images = [x for x in files if x.split(".")[-1].lower() in IMG_FORMATS]
         videos = [x for x in files if x.split(".")[-1].lower() in VID_FORMATS]
-        ni, nv = len(images), len(videos)
+        nv = len(videos)
+        if nchannel == 4:
+            images_RGB = [x for x in RGB_file if x.split(".")[-1].lower() in IMG_FORMATS]
+            images_IR = [x for x in IR_file if x.split(".")[-1].lower() in IMG_FORMATS]
+            # a pair, so not counting 2 different images, assuming no videos
+            ni = len(images_RGB)
+            self.img_RGB = images_RGB
+            self.img_IR = images_IR
+        else:
+            images = [x for x in files if x.split(".")[-1].lower() in IMG_FORMATS]
+            self.files = images + videos
+            ni, nv = len(images), len(videos)
 
+        self.nchannel = nchannel
         self.img_size = img_size
         self.stride = stride
-        self.files = images + videos
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = "image"
@@ -233,7 +236,7 @@ class LoadImages:
         else:
             self.cap = None
         assert self.nf > 0, (
-            f"No images or videos found in {p}. "
+            f"No images or videos found in {path}. "
             f"Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}"
         )
 
@@ -244,7 +247,12 @@ class LoadImages:
     def __next__(self):
         if self.count == self.nf:
             raise StopIteration
-        path = self.files[self.count]
+
+        if self.nchannel == 4:
+            path_RGB = self.img_RGB[self.count]
+            path_IR = self.img_IR[self.count]
+        else:
+            path = self.files[self.count]
 
         if self.video_flag[self.count]:
             # Read video
@@ -266,9 +274,23 @@ class LoadImages:
         else:
             # Read image
             self.count += 1
-            img0 = cv2.imread(path)  # BGR
-            assert img0 is not None, f"Image Not Found {path}"
-            s = f"image {self.count}/{self.nf} {path}: "
+            s = f"image {self.count}: "
+            if self.nchannel == 1:
+                img0 = cv2.imread(path, 0)  # grayscale
+            elif self.nchannel == 4:
+                img_rgb = cv2.imread(path_RGB)
+                img_ir = cv2.imread(path_IR, 0)
+
+                # merge the file for 4 channel
+                img0 = cv2.merge((img_rgb, img_ir))
+            else:
+                img0 = cv2.imread(path)  # BGR / 3 channel
+
+            if self.nchannel == 4:
+                assert img0 is not None, "Image Not Found " + path_RGB
+                assert img0 is not None, "Image Not Found " + path_IR
+            else:
+                assert img0 is not None, "Image Not Found " + path
 
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
@@ -277,7 +299,7 @@ class LoadImages:
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return path, img, img0, self.cap, s
+        return path_RGB, path_IR, img, img0, self.cap, s
 
     def new_video(self, path):
         self.frame = 0
@@ -535,10 +557,27 @@ class LoadImagesAndLabels(Dataset):
             cache, exists = self.cache_labels(Path(cache_path), prefix), False  # cache
         # Display cache
         nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupted, total
+        d = (nf, nm, ne, nc, n)
         if exists:
             d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
         assert nf > 0 or not augment, f"{prefix}No labels in {cache_path}. See {HELP_URL}"
+
+        # save log files of loading
+        loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
+        if is_train == "train" and os.path.isfile(loading_log_path):
+            os.remove(loading_log_path)
+        msg = (
+            "##########################\n"
+            f"{is_train} data has ...\n"
+            f"RGB: {len(self.img_files)} files\n"
+            f"FIR: {len(self.img_files_ir)} files\n"
+            f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
+            "##########################\n"
+        )
+        with open(loading_log_path, "a+") as f:
+            f.write(msg)
+            LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
 
         # Read cache
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
@@ -636,8 +675,8 @@ class LoadImagesAndLabels(Dataset):
                     x[im_file] = [l, shape, segments]
                 if msg:
                     msgs.append(msg)
-                pbar.desc = f"{desc}{nf} found, {nm} missing, {ne} empty, {nc} corrupted"
-
+                d = f"{desc}{nf} found, {nm} missing, {ne} empty, {nc} corrupted"
+                pbar.desc = d
         pbar.close()
         if msgs:
             LOGGER.info("\n".join(msgs))
@@ -661,7 +700,7 @@ class LoadImagesAndLabels(Dataset):
     # def __iter__(self):
     #     self.count = -1
     #     print('ran dataset iter')
-    #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
+    #     #self.shuffled_vector = np.random.permutation(self.nf) if self.augment else np.arange(self.nf)
     #     return self
 
     def __getitem__(self, index):
