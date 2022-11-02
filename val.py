@@ -199,7 +199,7 @@ def run(
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     pbar = tqdm(dataloader, desc=s, ncols=NCOLS, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}")  # progress bar
-    plot_num = 0
+    max_target: int = 0
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         t1 = time_sync()
         if pt:
@@ -263,14 +263,17 @@ def run(
             if save_json:
                 save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
             callbacks.run("on_val_image_end", pred, predn, path, names, im[si])
+            if max_target < len(targets):
+                max_target = len(targets)
+                res = (batch_i, im, targets, out, paths, names)
 
-        # Plot images
-        if plots and plot_num < 1 and (batch_i == 0 or len(targets) > 20):  # 推測と正解ラベル数が計20以上
-            plot_num += 1
-            f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
-            Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
-            f = save_dir / f"val_batch{batch_i}_pred.jpg"  # predictions
-            Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
+    # Plot images
+    if plots and res:  # 推測と正解ラベル数が計20以上
+        batch_i, im, targets, out, paths, names = res
+        f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
+        Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
+        f = save_dir / f"val_batch{batch_i}_pred.jpg"  # predictions
+        Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Compute metrics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
@@ -358,7 +361,7 @@ def parse_opt():
     parser.add_argument("--save-json", action="store_true", help="save a COCO-JSON results file")
     parser.add_argument("--project", default=ROOT / "runs/val", help="save to project/name")
     parser.add_argument("--name", default="exp", help="save to project/name")
-    parser.add_argument("--exist-ok", action="store_true", help="existing project/name ok, do not increment")
+    parser.add_argument("--exist-ok", action="store_false", help="existing project/name ok, do not increment")
     parser.add_argument("--half", action="store_true", help="use FP16 half-precision inference")
     parser.add_argument("--dnn", action="store_true", help="use OpenCV DNN for ONNX inference")
     opt = parser.parse_args()
