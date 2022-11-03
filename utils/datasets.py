@@ -27,8 +27,18 @@ from torch.utils.data import DataLoader, Dataset, dataloader, distributed
 from tqdm import tqdm
 
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
-from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
-                           xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
+from utils.general import (
+    LOGGER,
+    check_dataset,
+    check_requirements,
+    check_yaml,
+    clean_str,
+    segments2boxes,
+    xyn2xy,
+    xywh2xyxy,
+    xywhn2xyxy,
+    xyxy2xywhn,
+)
 from utils.torch_utils import torch_distributed_zero_first
 
 # Parameters
@@ -487,6 +497,7 @@ class LoadImagesAndLabels(Dataset):
         os.makedirs(path + os.sep + "cache", exist_ok=True)
         try:
             # loading RGB images
+            msg = "\n□ is train group, ■ is val group\n"
             dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
             dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
             if "kaist" in dirs[0]:
@@ -503,7 +514,7 @@ class LoadImagesAndLabels(Dataset):
                     f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
                     f = [x for x in f if x.split(".")[-1].lower() in IMG_FORMATS]
                     f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
-                    # train と test の振り分け
+                    # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
                     spl = split_list(f, 10)
                     idx_train = [0, 1, 2, 4, 6, 7, 8]
                     idx_val = [3, 5, 9]
@@ -511,7 +522,7 @@ class LoadImagesAndLabels(Dataset):
                     try:
                         d = int(re.sub(r"\D", "", dir))
                     except Exception:
-                        d = ord(dir[0])
+                        d = ord(dir[-2])
                     idx_train = list(map(lambda x: (x + d) % 10, idx_train))
                     idx_val = list(map(lambda x: (x + d) % 10, idx_val))
                     if is_train == "train":
@@ -520,6 +531,10 @@ class LoadImagesAndLabels(Dataset):
                     else:
                         for id in idx_val:
                             fs += spl[id]
+                        msg += show_selected(dir, idx_val)
+                if is_train == "val":
+                    print(msg)
+                    msg = ""
 
             # self.img_files = random.sample(fs, len(fs)) # slide data
             self.img_files = fs
@@ -529,12 +544,10 @@ class LoadImagesAndLabels(Dataset):
         except Exception:
             raise Exception(f"Error loading data from {path}. See {HELP_URL}")
 
-        try:
-            self.img_files_ir = [
-                x.replace(os.sep + rgb_folder + os.sep, os.sep + fir_folder + os.sep) for x in self.img_files
-            ]
-        except Exception:
-            raise Exception(f"Error loading data from {path}. See {HELP_URL}")
+        # loading FIR images from RGB image path
+        self.img_files_ir = [
+            x.replace(os.sep + rgb_folder + os.sep, os.sep + fir_folder + os.sep) for x in self.img_files
+        ]
 
         # ----------------------------------------------------------------------------------------------------------------#
         # Define labels
@@ -565,9 +578,7 @@ class LoadImagesAndLabels(Dataset):
 
         # save log files of loading
         loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
-        if is_train == "train" and os.path.isfile(loading_log_path):
-            os.remove(loading_log_path)
-        msg = (
+        msg += (
             "##########################\n"
             f"{is_train} data has ...\n"
             f"RGB: {len(self.img_files)} files\n"
@@ -575,6 +586,8 @@ class LoadImagesAndLabels(Dataset):
             f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
             "##########################\n"
         )
+        if is_train == "train" and os.path.isfile(loading_log_path):
+            os.remove(loading_log_path)
         with open(loading_log_path, "a+") as f:
             f.write(msg)
             LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
@@ -1250,8 +1263,19 @@ def dataset_stats(path="coco128.yaml", autodownload=False, verbose=False, profil
 
 
 # add okuda -------------------------------------------------------------------------------
-def split_list(list: list, n: int):
+def split_list(list: list, n: int) -> list:
     list_size = len(list)
     a = list_size // n
     b = list_size % n
     return [list[i * a + (i if i < b else b) : (i + 1) * a + (i + 1 if i < b else b)] for i in range(n)]
+
+
+def show_selected(dir: str, idx: list) -> str:
+    msg = f"{dir}: "
+    for i in range(10):
+        if i in idx:
+            msg += "■"
+        else:
+            msg += "□"
+    msg += "\n"
+    return msg

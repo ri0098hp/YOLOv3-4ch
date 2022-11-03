@@ -276,7 +276,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
     # Process 0
     if RANK in [-1, 0]:
         val_loader = create_dataloader(
-            "test",
+            "val",
             data_path,
             rgb_dir,
             fir_dir,

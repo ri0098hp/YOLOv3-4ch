@@ -8,7 +8,7 @@
     python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --data data/fujinolab-all.yaml --device 0,1
 
 [val]
-  python val.py --weights weights/pers_bs16.pt --data data/fujinolab-all.yaml
+  python val.py --weights weights/pers_bs16.pt --data data/fujinolab-all.yaml --exist-ok
 
 [detect]
-  python detect.py --weights weights/pers_bs16.pt --source dataset/debug --exist-ok
+  python detect.py --weights weights/pers_bs16.pt --source dataset/imgs --exist-ok
