@@ -15,9 +15,9 @@ from threading import Thread
 
 import numpy as np
 import torch
-from tqdm import tqdm
-
+import yaml
 from models.common import DetectMultiBackend
+from tqdm import tqdm
 from utils.callbacks import Callbacks
 from utils.datasets import create_dataloader
 from utils.general import (
@@ -100,6 +100,7 @@ def process_batch(detections, labels, iouv):
 
 @torch.no_grad()
 def run(
+    hyp=None,
     data=None,
     weights=None,  # model.pt path(s)
     batch_size=32,  # batch size
@@ -127,6 +128,11 @@ def run(
     callbacks=Callbacks(),
     compute_loss=None,
 ):
+    # Hyperparameters
+    if isinstance(hyp, str):
+        with open(hyp, errors="ignore") as f:
+            hyp = yaml.safe_load(f)  # load hyps dict
+
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -175,7 +181,7 @@ def run(
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
         nchannels = 4
         dataloader = create_dataloader(
-            "test",
+            "val",
             data["data_path"],
             data["rgb_folder"],
             data["fir_folder"],
@@ -185,6 +191,7 @@ def run(
             batch_size,
             stride,
             single_cls,
+            hyp=hyp,
             pad=pad,
             rect=pt,
             prefix=colorstr(f"{task}: "),
@@ -345,6 +352,7 @@ def run(
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default=ROOT / "data/fujinolab-all.yaml", help="dataset.yaml path")
+    parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/default.yaml", help="hyperparameters path")
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov3.pt", help="model.pt path(s)")
     parser.add_argument("--batch-size", type=int, default=32, help="batch size")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="inference size (pixels)")
@@ -361,12 +369,13 @@ def parse_opt():
     parser.add_argument("--save-json", action="store_true", help="save a COCO-JSON results file")
     parser.add_argument("--project", default=ROOT / "runs/val", help="save to project/name")
     parser.add_argument("--name", default="exp", help="save to project/name")
-    parser.add_argument("--exist-ok", action="store_false", help="existing project/name ok, do not increment")
+    parser.add_argument("--exist-ok", action="store_true", help="existing project/name ok, do not increment")
     parser.add_argument("--half", action="store_true", help="use FP16 half-precision inference")
     parser.add_argument("--dnn", action="store_true", help="use OpenCV DNN for ONNX inference")
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
     opt.save_json |= opt.data.endswith("coco.yaml")
+    opt.hyp = check_yaml(opt.hyp)
     opt.save_txt |= opt.save_hybrid
     print_args(FILE.stem, opt)
     return opt

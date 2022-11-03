@@ -25,10 +25,19 @@ import yaml  # type: ignore
 from PIL import ExifTags, Image, ImageOps
 from torch.utils.data import DataLoader, Dataset, dataloader, distributed
 from tqdm import tqdm
-
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
-from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
-                           xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
+from utils.general import (
+    LOGGER,
+    check_dataset,
+    check_requirements,
+    check_yaml,
+    clean_str,
+    segments2boxes,
+    xyn2xy,
+    xywh2xyxy,
+    xywhn2xyxy,
+    xyxy2xywhn,
+)
 from utils.torch_utils import torch_distributed_zero_first
 
 # Parameters
@@ -481,37 +490,40 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = data_path
         self.albumentations = Albumentations() if augment else None
-
-        # Define image files
+        print()
+        # Define image files --------------------------------------------------------------------------------------
         path = str(Path(data_path))
         os.makedirs(path + os.sep + "cache", exist_ok=True)
         try:
             # loading RGB images
-            dirs = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
+            # 画像の存在するフォルダを取得しその親フォルダをdirsとする(通常日時フォルダのぱす)
+            dirs: list = sorted(glob.iglob(os.path.join(path, "**", rgb_folder, ""), recursive=True))
             dirs = [x.replace(rgb_folder + os.sep, "") for x in dirs]
-            if "kaist" in dirs[0]:
+            if "kaist" in dirs[0]:  # kaistの場合はtrainとvalフォルダで切り分け (先行研究)
                 if is_train == "train":
-                    dir = dirs[0]
+                    dir: str = dirs[0]
                 else:
-                    dir = dirs[1]
+                    dir: str = dirs[1]
                 fs = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
                 fs = [x for x in fs if x.split(".")[-1].lower() in IMG_FORMATS]
                 fs.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
-            else:
-                fs = []
-                for dir in dirs:
-                    f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
+            else:  # 自作データセットの場合はディレクトリごとに割合で振り分け
+                fs = []  # ファイルパス
+                for dir in dirs:  # 日付ディレクトリごとに探索
+                    # RGBフォルダ下の画像を探索
+                    f: list = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
                     f = [x for x in f if x.split(".")[-1].lower() in IMG_FORMATS]
                     f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
-                    # train と test の振り分け
-                    spl = split_list(f, 10)
+
+                    # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
+                    spl: list = split_list(f, 10)
                     idx_train = [0, 1, 2, 4, 6, 7, 8]
                     idx_val = [3, 5, 9]
                     # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
                     try:
-                        d = int(re.sub(r"\D", "", dir))
+                        d: int = int(re.sub(r"\D", "", dir))
                     except Exception:
-                        d = ord(dir[0])
+                        d: int = ord(dir[-2])
                     idx_train = list(map(lambda x: (x + d) % 10, idx_train))
                     idx_val = list(map(lambda x: (x + d) % 10, idx_val))
                     if is_train == "train":
@@ -520,32 +532,44 @@ class LoadImagesAndLabels(Dataset):
                     else:
                         for id in idx_val:
                             fs += spl[id]
-
+                        show_selected(dir, idx_val)
+            if is_train == "val":
+                print("□ is train group, ■ is val group\n")
             # self.img_files = random.sample(fs, len(fs)) # slide data
             self.img_files = fs
-            s = "\n".join(fs)
-            # with open(f"share/{is_train}_files.txt", "w") as f:
-            #     f.write(s)
         except Exception:
             raise Exception(f"Error loading data from {path}. See {HELP_URL}")
 
-        try:
-            self.img_files_ir = [
-                x.replace(os.sep + rgb_folder + os.sep, os.sep + fir_folder + os.sep) for x in self.img_files
-            ]
-        except Exception:
-            raise Exception(f"Error loading data from {path}. See {HELP_URL}")
+        # loading FIR images from RGB image path
+        target = os.sep + rgb_folder + os.sep
+        dst = os.sep + fir_folder + os.sep
+        self.img_files_ir = [x.replace(target, dst) for x in self.img_files]
 
-        # ----------------------------------------------------------------------------------------------------------------#
-        # Define labels
+        # Define labels --------------------------------------------------------------------------------------
         self.label_files = []
         for f in self.img_files_ir:
+            # change path fir folder to label folder
             x = f.replace(os.sep + fir_folder + os.sep, os.sep + labels_folder + os.sep)
+            # change path img file to txt file
             label_fp = x.replace(os.path.splitext(x)[-1], ".txt")
-            if os.path.exists(label_fp):  # labels in FIR_labels
+            if os.path.exists(label_fp):
                 self.label_files.append(label_fp)
             else:  # labels in same folder
                 self.label_files.append(f.replace(os.path.splitext(x)[-1], ".txt"))
+
+        # remove path without labels
+        idx = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]
+        ratio = hyp["ignore_rate"]
+        for i in sorted(idx, reverse=True):
+            if np.random.choice([True, False], p=[ratio, 1 - ratio]):
+                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+
+        # order pair check
+        # 拡張子を除いたファイル名を比較し画像間とラベルで同期しているか確認
+        tf = re.split(f"[.|{os.sep}]", self.img_files[-1])[-2] == re.split(f"[.|{os.sep}]", self.img_files_ir[-1])[-2]
+        assert tf, "RGB-FIR images missing pair"
+        tf = re.split(f"[.|{os.sep}]", self.img_files[-1])[-2] == re.split(f"[.|{os.sep}]", self.label_files[-1])[-2]
+        assert tf, "img and label missing pair"
 
         # Check cache - data_pathの直下にcacheフォルダ作成
         cache_path = os.path.join(path, "cache", f"{is_train}_labels.npy")
@@ -565,8 +589,6 @@ class LoadImagesAndLabels(Dataset):
 
         # save log files of loading
         loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
-        if is_train == "train" and os.path.isfile(loading_log_path):
-            os.remove(loading_log_path)
         msg = (
             "##########################\n"
             f"{is_train} data has ...\n"
@@ -575,6 +597,8 @@ class LoadImagesAndLabels(Dataset):
             f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
             "##########################\n"
         )
+        if is_train == "train" and os.path.isfile(loading_log_path):
+            os.remove(loading_log_path)
         with open(loading_log_path, "a+") as f:
             f.write(msg)
             LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
@@ -608,7 +632,7 @@ class LoadImagesAndLabels(Dataset):
                 if segment:
                     self.segments[i][:, 0] = 0
 
-        # Rectangular Training
+        # Rectangular Training --------------------------------------------------------------------------------------
         if self.rect:
             # Sort by aspect ratio
             s = self.shapes  # wh
@@ -938,84 +962,6 @@ def load_mosaic(self, index, nchannel):
     return img4, labels4
 
 
-# def load_mosaic9(self, index):
-#     #  9-mosaic loader. Loads 1 image + 8 random images into a 9-image mosaic
-#     labels9, segments9 = [], []
-#     s = self.img_size
-#     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
-#     random.shuffle(indices)
-#     for i, index in enumerate(indices):
-#         # Load image
-#         img, _, (h, w) = load_image(self, index)
-
-#         # place img in img9
-#         if i == 0:  # center
-#             img9 = np.full((s * 3, s * 3, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
-#             h0, w0 = h, w
-#             c = s, s, s + w, s + h  # xmin, ymin, xmax, ymax (base) coordinates
-#         elif i == 1:  # top
-#             c = s, s - h, s + w, s
-#         elif i == 2:  # top right
-#             c = s + wp, s - h, s + wp + w, s
-#         elif i == 3:  # right
-#             c = s + w0, s, s + w0 + w, s + h
-#         elif i == 4:  # bottom right
-#             c = s + w0, s + hp, s + w0 + w, s + hp + h
-#         elif i == 5:  # bottom
-#             c = s + w0 - w, s + h0, s + w0, s + h0 + h
-#         elif i == 6:  # bottom left
-#             c = s + w0 - wp - w, s + h0, s + w0 - wp, s + h0 + h
-#         elif i == 7:  # left
-#             c = s - w, s + h0 - h, s, s + h0
-#         elif i == 8:  # top left
-#             c = s - w, s + h0 - hp - h, s, s + h0 - hp
-
-#         padx, pady = c[:2]
-#         x1, y1, x2, y2 = (max(x, 0) for x in c)  # allocate coords
-
-#         # Labels
-#         labels, segments = self.labels[index].copy(), self.segments[index].copy()
-#         if labels.size:
-#             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padx, pady)  # normalized xywh to pixel xyxy format
-#             segments = [xyn2xy(x, w, h, padx, pady) for x in segments]
-#         labels9.append(labels)
-#         segments9.extend(segments)
-
-#         # Image
-#         img9[y1:y2, x1:x2] = img[y1 - pady :, x1 - padx :]  # img9[ymin:ymax, xmin:xmax]
-#         hp, wp = h, w  # height, width previous
-
-#     # Offset
-#     yc, xc = (int(random.uniform(0, s)) for _ in self.mosaic_border)  # mosaic center x, y
-#     img9 = img9[yc : yc + 2 * s, xc : xc + 2 * s]
-
-#     # Concat/clip labels
-#     labels9 = np.concatenate(labels9, 0)
-#     labels9[:, [1, 3]] -= xc
-#     labels9[:, [2, 4]] -= yc
-#     c = np.array([xc, yc])  # centers
-#     segments9 = [x - c for x in segments9]
-
-#     for x in (labels9[:, 1:], *segments9):
-#         np.clip(x, 0, 2 * s, out=x)  # clip when using random_perspective()
-#     # img9, labels9 = replicate(img9, labels9)  # replicate
-
-#     # Augment
-#     img9, labels9 = random_perspective(
-#         img9,
-#         labels9,
-#         segments9,
-#         degrees=self.hyp["degrees"],
-#         translate=self.hyp["translate"],
-#         scale=self.hyp["scale"],
-#         shear=self.hyp["shear"],
-#         perspective=self.hyp["perspective"],
-#         border=self.mosaic_border,
-#     )  # border to remove
-
-#     return img9, labels9
-
-
 def create_folder(path="./new"):
     # Create folder
     if os.path.exists(path):
@@ -1250,8 +1196,24 @@ def dataset_stats(path="coco128.yaml", autodownload=False, verbose=False, profil
 
 
 # add okuda -------------------------------------------------------------------------------
-def split_list(list: list, n: int):
+def split_list(list: list, n: int) -> list:
+    """
+    配列を均等にn分割する
+    """
     list_size = len(list)
     a = list_size // n
     b = list_size % n
     return [list[i * a + (i if i < b else b) : (i + 1) * a + (i + 1 if i < b else b)] for i in range(n)]
+
+
+def show_selected(dir: str, idx: list):
+    """
+    振り分けを可視化する関数
+    """
+    msg = f"{dir}: "
+    for i in range(10):
+        if i in idx:
+            msg += "■"
+        else:
+            msg += "□"
+    print(msg)
