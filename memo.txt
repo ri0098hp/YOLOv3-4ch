@@ -3,12 +3,13 @@
 
   [multi gpu training]
     python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --data data/fujinolab-all.yaml
-    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --data data/debug.yaml
+    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --data data/debug.yaml --exist-ok
   [with sync batch norm --sync-bn]
     python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --data data/fujinolab-all.yaml --device 0,1
 
 [val]
   python val.py --weights weights/pers_bs16.pt --data data/fujinolab-all.yaml --exist-ok
+  python val.py --weights weights/pers_bs16.pt --data data/debug.yaml --exist-ok
 
 [detect]
   python detect.py --weights weights/pers_bs16.pt --source dataset/imgs --exist-ok

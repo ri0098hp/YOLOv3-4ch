@@ -19,15 +19,14 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+import val  # for end-of-epoch mAP
 import yaml  # type: ignore
+from models.experimental import attempt_load
+from models.yolo import Model
 from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, lr_scheduler
 from tqdm import tqdm
-
-import val  # for end-of-epoch mAP
-from models.experimental import attempt_load
-from models.yolo import Model
 from utils.autoanchor import check_anchors
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
@@ -432,7 +431,8 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
             final_epoch = (epoch + 1 == epochs) or stopper.possible_stop
             if not noval or final_epoch:  # Calculate mAP
                 results, maps, _ = val.run(
-                    data_dict,
+                    hyp=hyp,
+                    data=data_dict,
                     batch_size=batch_size // WORLD_SIZE * 2,
                     imgsz=imgsz,
                     model=ema.ema,
