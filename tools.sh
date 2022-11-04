@@ -1,12 +1,14 @@
 function usage {
   cat <<EOM
 Usage: $(basename "$0") [OPTION]...
-  -h          Display help
-  -b buid Dockerfile
-  -d debug
+  -h Display help
+  -a attached container
+  -b buid from Dockerfile
+  -d debug (you should build image manually first)
+  -e exec into container
   -r simple run
+  -s down the container
 EOM
-
   exit 2
 }
 
