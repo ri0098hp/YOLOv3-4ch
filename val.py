@@ -179,7 +179,7 @@ def run(
             model(torch.zeros(1, 4, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
         pad = 0.0 if task == "speed" else 0.5
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
-        nchannels = 4
+        nchannels = data["ch"]
         dataloader = create_dataloader(
             "val",
             data["data_path"],
@@ -360,7 +360,7 @@ def parse_opt():
     parser.add_argument("--iou-thres", type=float, default=0.6, help="NMS IoU threshold")
     parser.add_argument("--task", default="val", help="train, val, test, speed or study")
     parser.add_argument("--device", default="", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
-    parser.add_argument("--single-cls", action="store_false", help="treat as single-class dataset")
+    parser.add_argument("--single-cls", action="store_true", help="treat as single-class dataset")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     parser.add_argument("--verbose", action="store_true", help="report mAP by class")
     parser.add_argument("--save-txt", action="store_true", help="save results to *.txt")
