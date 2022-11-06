@@ -561,8 +561,9 @@ class LoadImagesAndLabels(Dataset):
         idx = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]
         ratio = hyp["ignore_rate"]
         for i in sorted(idx, reverse=True):
-            if np.random.choice([True, False], p=[ratio, 1 - ratio]):
-                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+            if i % int(ratio * 100) == 0:
+                continue
+            self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
 
         # order pair check
         # 拡張子を除いたファイル名を比較し画像間とラベルで同期しているか確認
@@ -595,6 +596,8 @@ class LoadImagesAndLabels(Dataset):
             f"RGB: {len(self.img_files)} files\n"
             f"FIR: {len(self.img_files_ir)} files\n"
             f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
+            f"non-labeled images are {int(100*(nm+ne+nc)/(nf+nm+ne+nc))}% in all\n"
+            f"suggest ignore_rate is {float(nf)*0.05/(float(nm+ne+nc)*(1.0-0.05)):.5}\n"
             "##########################\n"
         )
         if is_train == "train" and os.path.isfile(loading_log_path):

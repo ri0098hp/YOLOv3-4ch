@@ -25,7 +25,7 @@ WORKDIR /usr/src/app
 COPY . /usr/src/app
 
 # Downloads to user config dir
-ADD https://ultralytics.com/assets/Arial.ttf /root/.config/Ultralytics/
+ADD https://ultralytics.com/assets/Arial.ttf https://ultralytics.com/assets/Arial.Unicode.ttf /root/.config/Ultralytics/
 
 # Set environment variables
 # ENV HOME=/usr/src/app
