@@ -3,5 +3,6 @@ rgb_folder: RGB
 fir_folder: FIR
 labels_folder: FIR_labels
 
-nc: 1  # number of classes
-names: ['person']  # class names
+nc: 1
+ch: 4
+names: ['person']

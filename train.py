@@ -24,7 +24,6 @@ import yaml  # type: ignore
 from models.experimental import attempt_load
 from models.yolo import Model
 from torch.cuda import amp
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, lr_scheduler
 from tqdm import tqdm
 from utils.autoanchor import check_anchors
@@ -60,7 +59,14 @@ from utils.loggers.wandb.wandb_utils import check_wandb_resume
 from utils.loss import ComputeLoss
 from utils.metrics import fitness
 from utils.plots import plot_evolve, plot_labels
-from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_device, torch_distributed_zero_first
+from utils.torch_utils import (
+    EarlyStopping,
+    ModelEMA,
+    de_parallel,
+    select_device,
+    smart_DDP,
+    torch_distributed_zero_first,
+)
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # root directory
@@ -130,7 +136,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
     data_path = data_dict["data_path"]
     rgb_dir, fir_dir = data_dict["rgb_folder"], data_dict["fir_folder"]
     labels_dir = data_dict["labels_folder"]
-    nchannels = 4
+    nch = data_dict["ch"]
 
     nc = 1 if single_cls else int(data_dict["nc"])  # number of classes
     names = ["item"] if single_cls and len(data_dict["names"]) != 1 else data_dict["names"]  # class names
@@ -144,14 +150,14 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
         with torch_distributed_zero_first(LOCAL_RANK):
             weights = attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt["model"].yaml, ch=3, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
+        model = Model(cfg or ckpt["model"].yaml, ch=nch, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
         exclude = ["anchor"] if (cfg or hyp.get("anchors")) and not resume else []  # exclude keys
         csd = ckpt["model"].float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(csd, strict=False)  # load
         LOGGER.info(f"Transferred {len(csd)}/{len(model.state_dict())} items from {weights}")  # report
     else:
-        model = Model(cfg, ch=3, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
+        model = Model(cfg, ch=nch, anchors=hyp.get("anchors")).to(device)  # create
 
     # Freeze
     freeze = [f"model.{x}." for x in range(freeze)]  # layers to freeze
@@ -252,7 +258,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
         rgb_dir,
         fir_dir,
         labels_dir,
-        nchannels,
+        nch,
         imgsz,
         batch_size // WORLD_SIZE,
         gs,
@@ -280,7 +286,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
             rgb_dir,
             fir_dir,
             labels_dir,
-            nchannels,
+            nch,
             imgsz,
             batch_size // WORLD_SIZE * 2,
             gs,
@@ -289,7 +295,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
             cache=None if noval else opt.cache,
             rect=True,
             rank=-1,
-            workers=workers,
+            workers=workers * 2,
             pad=0.5,
             prefix=colorstr("val: "),
         )[0]
@@ -311,7 +317,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 
     # DDP mode
     if cuda and RANK != -1:
-        model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
+        model = smart_DDP(model)
 
     # Model parameters
     nl = de_parallel(model).model[-1].nl  # number of detection layers (to scale hyps)
@@ -489,6 +495,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 
         # end epoch ---------------------------------------------------------------------------------------------------
     # end training ----------------------------------------------------------------------------------------------------
+
     if RANK in [-1, 0]:
         LOGGER.info(f"\n{epoch - start_epoch + 1} epochs completed in {(time.time() - t0) / 3600:.3f} hours.")
         for f in last, best:
@@ -497,6 +504,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
                 if f is best:
                     LOGGER.info(f"\nValidating {f}...")
                     results, _, _ = val.run(
+                        hyp,
                         data_dict,
                         batch_size=batch_size // WORLD_SIZE * 2,
                         imgsz=imgsz,
@@ -524,7 +532,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", type=str, default="", help="initial weights path")
-    parser.add_argument("--cfg", type=str, default="models/yolov3-spp-1cls-4ch.yaml", help="model.yaml path")
+    parser.add_argument("--cfg", type=str, default="models/yolov3-spp-1cls.yaml", help="model.yaml path")
     parser.add_argument("--data", type=str, default="data/debug.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/default.yaml", help="hyperparameters path")
     parser.add_argument("--epochs", type=int, default=50)
@@ -609,9 +617,6 @@ def main(opt, callbacks=Callbacks()):
     # Train
     if not opt.evolve:
         train(opt.hyp, opt, device, callbacks)
-        if WORLD_SIZE > 1 and RANK == 0:
-            LOGGER.info("Destroying process group... ")
-            dist.destroy_process_group()
 
     # Evolve hyperparameters (optional)
     else:

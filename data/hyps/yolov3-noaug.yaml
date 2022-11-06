@@ -3,19 +3,19 @@
 # python train.py --batch 32 --cfg yolov5m6.yaml --weights '' --data coco.yaml --img 1280 --epochs 300
 # See tutorials for hyperparameter evolution https://github.com/ultralytics/yolov5#tutorials
 
-lr0: 0.01 # initial learning rate (SGD=5E-3 Adam=5E-4)
-lrf: 0.0005 # final learning rate (with cos scheduler)
-momentum: 0.937 # SGD momentum
-weight_decay: 0.0005 # optimizer weight decay
+lr0: 0.01 # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrf: 0.1 # final OneCycleLR learning rate (lr0 * lrf)
+momentum: 0.937 # SGD momentum/Adam beta1
+weight_decay: 0.0005 # optimizer weight decay 5e-4
 warmup_epochs: 3.0 # warmup epochs (fractions ok)
 warmup_momentum: 0.8 # warmup initial momentum
 warmup_bias_lr: 0.1 # warmup initial bias lr
 box: 0.05 # box loss gain
-cls: 37.4 # cls loss gain
+cls: 0.5 # cls loss gain
 cls_pw: 1.0 # cls BCELoss positive_weight
-obj: 64.3 # obj loss gain (*=img_size/320 if img_size != 320)
+obj: 1.0 # obj loss gain (scale with pixels)
 obj_pw: 1.0 # obj BCELoss positive_weight
-iou_t: 0.20 # iou training threshold
+iou_t: 0.20 # IoU training threshold
 anchor_t: 4.0 # anchor-multiple threshold
 fl_gamma: 0.0 # focal loss gamma (efficientDet default is gamma=1.5)
 hsv_h: 0.0 # image HSV-Hue augmentation (fraction)
@@ -32,6 +32,6 @@ mosaic: 1.0 # image mosaic (probability)
 mixup: 0.0 # image mixup (probability)
 copy_paste: 0.0 # segment copy-paste (probability)
 
-ignore_rate: 0.9879 # ignore rate of images without labels (probability) = [found*0.05 / missing*(1-0.05)] @5% images remain
+ignore_rate: 0.9879 # ignore rate of images without labels (probability)
 # giou: 2.54 # giou loss gain
 # anchors: 3  # anchors per output layer (0 to ignore)

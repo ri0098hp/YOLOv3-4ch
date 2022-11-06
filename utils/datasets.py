@@ -46,6 +46,7 @@ IMG_FORMATS = ["bmp", "jpg", "jpeg", "png", "tif", "tiff", "dng", "webp", "mpo"]
 VID_FORMATS = ["mov", "avi", "mp4", "mpg", "mpeg", "m4v", "wmv", "mkv"]  # acceptable video suffixes
 WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))  # DPP
 NUM_THREADS = min(8, os.cpu_count())  # type: ignore
+RANK = int(os.getenv("RANK", -1))
 # number of multiprocessing threads
 
 # Get orientation exif tag
@@ -104,6 +105,13 @@ def exif_transpose(image):
     return image
 
 
+def seed_worker(worker_id):
+    # Set dataloader worker seed https://pytorch.org/docs/stable/notes/randomness.html#dataloader
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def create_dataloader(
     is_train,
     data_path,
@@ -155,6 +163,8 @@ def create_dataloader(
     nw = min([os.cpu_count() // WORLD_SIZE, batch_size if batch_size > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     loader = DataLoader if image_weights else InfiniteDataLoader  # only DataLoader allows for attribute updates
+    generator = torch.Generator()
+    generator.manual_seed(6148914691236517205 + RANK)
     return (
         loader(
             dataset,
@@ -164,6 +174,8 @@ def create_dataloader(
             sampler=sampler,
             pin_memory=True,
             collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,
+            worker_init_fn=seed_worker,
+            generator=generator,
         ),
         dataset,
     )
@@ -560,8 +572,10 @@ class LoadImagesAndLabels(Dataset):
         # remove path without labels
         idx = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]
         ratio = hyp["ignore_rate"]
-        for i in sorted(idx, reverse=True):
-            if np.random.choice([True, False], p=[ratio, 1 - ratio]):
+        if ratio != 0:
+            for i in sorted(idx, reverse=True):
+                if i % int(ratio * 100) == 0:
+                    continue
                 self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
 
         # order pair check
@@ -595,6 +609,8 @@ class LoadImagesAndLabels(Dataset):
             f"RGB: {len(self.img_files)} files\n"
             f"FIR: {len(self.img_files_ir)} files\n"
             f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
+            f"non-labeled images are {int(100*(nm+ne+nc)/(nf+nm+ne+nc))}% in all\n"
+            f"suggest ignore_rate is {float(nf)*0.05/(float(nm+ne+nc)*(1.0-0.05)):.5}\n"
             "##########################\n"
         )
         if is_train == "train" and os.path.isfile(loading_log_path):
