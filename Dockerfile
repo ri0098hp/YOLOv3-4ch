@@ -29,6 +29,7 @@ ADD https://ultralytics.com/assets/Arial.ttf https://ultralytics.com/assets/Aria
 
 # Set environment variables
 # ENV HOME=/usr/src/app
+ENV OMP_NUM_THREADS=8
 
 
 # Usage Examples -------------------------------------------------------------------------------------------------------

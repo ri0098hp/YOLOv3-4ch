@@ -17,13 +17,17 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-
-from utils.general import LOGGER
+from torch.nn.parallel import DistributedDataParallel as DDP
+from utils.general import LOGGER, check_version, colorstr
 
 try:
     import thop  # for FLOPs computation
 except ImportError:
     thop = None
+
+LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
+RANK = int(os.getenv("RANK", -1))
+WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
 
 
 @contextmanager
@@ -51,6 +55,18 @@ def git_describe(path=Path(__file__).parent):  # path must be a directory
         return subprocess.check_output(s, shell=True, stderr=subprocess.STDOUT).decode()[:-1]
     except subprocess.CalledProcessError:
         return ""  # not a git repository
+
+
+def smart_DDP(model):
+    # Model DDP creation with checks
+    assert not check_version(torch.__version__, "1.12.0", pinned=True), (
+        "torch==1.12.0 torchvision==0.13.0 DDP training is not supported due to a known issue. "
+        "Please upgrade or downgrade torch to use DDP. See https://github.com/ultralytics/yolov5/issues/8395"
+    )
+    if check_version(torch.__version__, "1.11.0"):
+        return DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK, static_graph=True)
+    else:
+        return DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
 
 
 def select_device(device="", batch_size=None, newline=True):

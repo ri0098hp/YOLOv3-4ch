@@ -24,7 +24,6 @@ import yaml  # type: ignore
 from models.experimental import attempt_load
 from models.yolo import Model
 from torch.cuda import amp
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, lr_scheduler
 from tqdm import tqdm
 from utils.autoanchor import check_anchors
@@ -60,7 +59,14 @@ from utils.loggers.wandb.wandb_utils import check_wandb_resume
 from utils.loss import ComputeLoss
 from utils.metrics import fitness
 from utils.plots import plot_evolve, plot_labels
-from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_device, torch_distributed_zero_first
+from utils.torch_utils import (
+    EarlyStopping,
+    ModelEMA,
+    de_parallel,
+    select_device,
+    smart_DDP,
+    torch_distributed_zero_first,
+)
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # root directory
@@ -289,7 +295,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
             cache=None if noval else opt.cache,
             rect=True,
             rank=-1,
-            workers=workers,
+            workers=workers * 2,
             pad=0.5,
             prefix=colorstr("val: "),
         )[0]
@@ -311,7 +317,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 
     # DDP mode
     if cuda and RANK != -1:
-        model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
+        model = smart_DDP(model)
 
     # Model parameters
     nl = de_parallel(model).model[-1].nl  # number of detection layers (to scale hyps)
