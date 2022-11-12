@@ -7,6 +7,7 @@ import csv
 import math
 import warnings
 from pathlib import Path
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -75,10 +76,14 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = {i: v for i, v in enumerate(names)}  # to dict
     if plot:
-        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.svg", names)
-        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.svg", names, ylabel="F1")
-        plot_mc_curve(px, p, Path(save_dir) / "P_curve.svg", names, ylabel="Precision")
-        plot_mc_curve(px, r, Path(save_dir) / "R_curve.svg", names, ylabel="Recall")
+        save_svg = Path(save_dir) / "svg"
+        save_csv = Path(save_dir) / "csv"
+        os.makedirs(save_svg, exist_ok=True)
+        os.makedirs(save_csv, exist_ok=True)
+        plot_pr_curve(px, py, ap, save_svg / "PR_curve.svg", names)
+        plot_mc_curve(px, f1, save_svg / "F1_curve.svg", names, ylabel="F1")
+        plot_mc_curve(px, p, save_svg / "P_curve.svg", names, ylabel="Precision")
+        plot_mc_curve(px, r, save_svg / "R_curve.svg", names, ylabel="Recall")
 
     i = f1.mean(0).argmax()  # max F1 index
     return p[:, i], r[:, i], ap, f1[:, i], unique_classes.astype("int32")
@@ -301,6 +306,13 @@ def wh_iou(wh1, wh2):
 
 # Plots ---------------------------------------------------------------------------------------------------------------
 def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
+    # add raw data as csv: okuda
+    with open(str(save_dir).replace("svg", "csv"), "w") as file:
+        writer = csv.writer(file, lineterminator="\n")
+        writer.writerow(["R", *names.values()])
+        for row in zip(np.around(px, 3), *np.around(py, 3)):
+            writer.writerow(row)
+
     # Precision-recall curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
     py = np.stack(py, axis=1)
@@ -322,6 +334,13 @@ def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
 
 
 def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence", ylabel="Metric"):
+    # add raw data as csv: okuda
+    with open(str(save_dir).replace("svg", "csv"), "w") as file:
+        writer = csv.writer(file, lineterminator="\n")
+        writer.writerow(["conf", *names.values()])
+        for row in zip(np.around(px, 3), *np.around(py, 3)):
+            writer.writerow(row)
+
     # Metric-confidence curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
 
