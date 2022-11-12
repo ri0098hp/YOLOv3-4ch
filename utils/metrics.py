@@ -3,6 +3,7 @@
 Model validation metrics
 """
 
+import csv
 import math
 import warnings
 from pathlib import Path
@@ -74,10 +75,10 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = {i: v for i, v in enumerate(names)}  # to dict
     if plot:
-        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.png", names)
-        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.png", names, ylabel="F1")
-        plot_mc_curve(px, p, Path(save_dir) / "P_curve.png", names, ylabel="Precision")
-        plot_mc_curve(px, r, Path(save_dir) / "R_curve.png", names, ylabel="Recall")
+        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.svg", names)
+        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.svg", names, ylabel="F1")
+        plot_mc_curve(px, p, Path(save_dir) / "P_curve.svg", names, ylabel="Precision")
+        plot_mc_curve(px, r, Path(save_dir) / "R_curve.svg", names, ylabel="Recall")
 
     i = f1.mean(0).argmax()  # max F1 index
     return p[:, i], r[:, i], ap, f1[:, i], unique_classes.astype("int32")
@@ -299,8 +300,6 @@ def wh_iou(wh1, wh2):
 
 
 # Plots ---------------------------------------------------------------------------------------------------------------
-
-
 def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
     # Precision-recall curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
