@@ -173,7 +173,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 
     # Batch size
     if RANK == -1 and batch_size == -1:  # single-GPU only, estimate best batch size
-        batch_size = check_train_batch_size(model, imgsz)
+        batch_size = check_train_batch_size(model, imgsz, nch)
 
     # Optimizer
     nbs = 64  # nominal batch size

@@ -33,6 +33,6 @@ mosaic: 1.0 # image mosaic (probability)
 mixup: 0.0 # image mixup (probability)
 copy_paste: 0.0 # segment copy-paste (probability)
 
-ignore_rate: 0.0 # ignore rate of images without labels (probability) 0.9879
+ignore_rate: 0.0 # ignore rate f images without labels (probability) 0.9879
 # giou: 2.54 # giou loss gain
 # anchors: 3  # anchors per output layer (0 to ignore)

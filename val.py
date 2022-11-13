@@ -116,6 +116,7 @@ def run(
     save_hybrid=False,  # save label+prediction hybrid results to *.txt
     save_conf=False,  # save confidences in --save-txt labels
     save_json=False,  # save a COCO-JSON results file
+    save_all=False,
     project=ROOT / "runs/val",  # save to project/name
     name="exp",  # save to project/name
     exist_ok=False,  # existing project/name ok, do not increment
@@ -274,8 +275,16 @@ def run(
                 max_target = len(targets)
                 res = (batch_i, im, targets, out, paths, names)
 
+        # Plot all images if save-all is enabled
+        if plots and save_all:
+            os.makedirs(save_dir / "jpg", exist_ok=True)
+            f = save_dir / "jpg" / f"val_batch{batch_i}_labels.jpg"  # labels
+            Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
+            f = save_dir / "jpg" / f"val_batch{batch_i}_pred.jpg"  # predictions
+            Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
+
     # Plot images
-    if plots and res:  # 推測と正解ラベル数が計20以上
+    if plots and (res):  # 推測と正解ラベル数が計20以上
         batch_i, im, targets, out, paths, names = res
         f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
         Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
@@ -367,6 +376,7 @@ def parse_opt():
     parser.add_argument("--save-hybrid", action="store_true", help="save label+prediction hybrid results to *.txt")
     parser.add_argument("--save-conf", action="store_true", help="save confidences in --save-txt labels")
     parser.add_argument("--save-json", action="store_true", help="save a COCO-JSON results file")
+    parser.add_argument("--save-all", action="store_true", help="save all val images, batch by batch")
     parser.add_argument("--project", default=ROOT / "runs/val", help="save to project/name")
     parser.add_argument("--name", default="exp", help="save to project/name")
     parser.add_argument("--exist-ok", action="store_true", help="existing project/name ok, do not increment")

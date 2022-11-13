@@ -3,9 +3,11 @@
 Model validation metrics
 """
 
+import csv
 import math
 import warnings
 from pathlib import Path
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -74,6 +76,10 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = {i: v for i, v in enumerate(names)}  # to dict
     if plot:
+        save_svg = Path(save_dir) / "svg"
+        save_csv = Path(save_dir) / "csv"
+        os.makedirs(save_svg, exist_ok=True)
+        os.makedirs(save_csv, exist_ok=True)
         plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.png", names)
         plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.png", names, ylabel="F1")
         plot_mc_curve(px, p, Path(save_dir) / "P_curve.png", names, ylabel="Precision")
@@ -299,9 +305,17 @@ def wh_iou(wh1, wh2):
 
 
 # Plots ---------------------------------------------------------------------------------------------------------------
-
-
 def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
+    # add raw data as csv: okuda
+    save_dir = Path(save_dir)
+    save_csv = str(save_dir.parent / "csv" / save_dir.stem) + ".csv"
+    save_svg = str(save_dir.parent / "svg" / save_dir.stem) + ".svg"
+    with open(save_csv, "w") as file:
+        writer = csv.writer(file, lineterminator="\n")
+        writer.writerow(["R", *names.values()])
+        for row in zip(np.around(px, 3), *np.around(py, 3)):
+            writer.writerow(row)
+
     # Precision-recall curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
     py = np.stack(py, axis=1)
@@ -318,11 +332,22 @@ def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    fig.savefig(Path(save_dir), dpi=250)
+    fig.savefig(save_dir, dpi=250)
+    fig.savefig(save_svg, dpi=250)
     plt.close()
 
 
 def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence", ylabel="Metric"):
+    # add raw data as csv: okuda
+    save_dir = Path(save_dir)
+    save_csv = str(save_dir.parent / "csv" / save_dir.stem) + ".csv"
+    save_svg = str(save_dir.parent / "svg" / save_dir.stem) + ".svg"
+    with open(save_csv, "w") as file:
+        writer = csv.writer(file, lineterminator="\n")
+        writer.writerow(["conf", *names.values()])
+        for row in zip(np.around(px, 3), *np.around(py, 3)):
+            writer.writerow(row)
+
     # Metric-confidence curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
 
@@ -339,5 +364,6 @@ def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence"
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    fig.savefig(Path(save_dir), dpi=250)
+    fig.savefig(save_dir, dpi=250)
+    fig.savefig(save_svg, dpi=250)
     plt.close()
