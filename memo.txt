@@ -12,8 +12,8 @@
   python val.py --weights weights/fujinolab-all.pt --data data/fujinolab-all.yaml --hyp data/hyps/labeled_only.yaml --exist-ok
 
 [detect]
-  python detect.py --weights weights/pers_bs16.pt --source dataset/imgs --exist-ok
+  python detect.py --weights weights/fujinolab-all.pt --source dataset/imgs --exist-ok
 
 [debug]
 python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --epochs 2 --device 0,1 --data data/debug.yaml --hyp data/hyps/labeled_only.yaml --exist-ok
-python train.py --epochs 2 --device 1 --data data/debug.yaml --hyp data/hyps/labeled_only.yaml --exist-ok
+python train.py --epochs 2 --device 0 --data data/debug.yaml --hyp data/hyps/labeled_only.yaml --exist-ok

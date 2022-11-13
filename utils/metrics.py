@@ -80,10 +80,10 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir=".", names
         save_csv = Path(save_dir) / "csv"
         os.makedirs(save_svg, exist_ok=True)
         os.makedirs(save_csv, exist_ok=True)
-        plot_pr_curve(px, py, ap, save_svg / "PR_curve.svg", names)
-        plot_mc_curve(px, f1, save_svg / "F1_curve.svg", names, ylabel="F1")
-        plot_mc_curve(px, p, save_svg / "P_curve.svg", names, ylabel="Precision")
-        plot_mc_curve(px, r, save_svg / "R_curve.svg", names, ylabel="Recall")
+        plot_pr_curve(px, py, ap, Path(save_dir) / "PR_curve.png", names)
+        plot_mc_curve(px, f1, Path(save_dir) / "F1_curve.png", names, ylabel="F1")
+        plot_mc_curve(px, p, Path(save_dir) / "P_curve.png", names, ylabel="Precision")
+        plot_mc_curve(px, r, Path(save_dir) / "R_curve.png", names, ylabel="Recall")
 
     i = f1.mean(0).argmax()  # max F1 index
     return p[:, i], r[:, i], ap, f1[:, i], unique_classes.astype("int32")
@@ -307,7 +307,10 @@ def wh_iou(wh1, wh2):
 # Plots ---------------------------------------------------------------------------------------------------------------
 def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
     # add raw data as csv: okuda
-    with open(str(save_dir).replace("svg", "csv"), "w") as file:
+    save_dir = Path(save_dir)
+    save_csv = str(save_dir.parent / "csv" / save_dir.stem) + ".csv"
+    save_svg = str(save_dir.parent / "svg" / save_dir.stem) + ".svg"
+    with open(save_csv, "w") as file:
         writer = csv.writer(file, lineterminator="\n")
         writer.writerow(["R", *names.values()])
         for row in zip(np.around(px, 3), *np.around(py, 3)):
@@ -329,13 +332,17 @@ def plot_pr_curve(px, py, ap, save_dir="pr_curve.png", names=()):
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    fig.savefig(Path(save_dir), dpi=250)
+    fig.savefig(save_dir, dpi=250)
+    fig.savefig(save_svg, dpi=250)
     plt.close()
 
 
 def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence", ylabel="Metric"):
     # add raw data as csv: okuda
-    with open(str(save_dir).replace("svg", "csv"), "w") as file:
+    save_dir = Path(save_dir)
+    save_csv = str(save_dir.parent / "csv" / save_dir.stem) + ".csv"
+    save_svg = str(save_dir.parent / "svg" / save_dir.stem) + ".svg"
+    with open(save_csv, "w") as file:
         writer = csv.writer(file, lineterminator="\n")
         writer.writerow(["conf", *names.values()])
         for row in zip(np.around(px, 3), *np.around(py, 3)):
@@ -357,5 +364,6 @@ def plot_mc_curve(px, py, save_dir="mc_curve.png", names=(), xlabel="Confidence"
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    fig.savefig(Path(save_dir), dpi=250)
+    fig.savefig(save_dir, dpi=250)
+    fig.savefig(save_svg, dpi=250)
     plt.close()
