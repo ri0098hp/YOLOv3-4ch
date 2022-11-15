@@ -32,5 +32,5 @@ mosaic: 1.0 # image mosaic (probability)
 mixup: 0.0 # image mixup (probability)
 copy_paste: 0.0 # segment copy-paste (probability)
 
-# pos_imgs: 2000 # number of labeled images to use (optionally)
-# neg_ratio: 1.0 # ratio of non-labeled images to labeled ones (optionally)
+pos_imgs: 550 # number of labeled images to use (optionally)
+neg_ratio: 6.0 # ratio of non-labeled images to labeled ones (optionally)

@@ -3,9 +3,7 @@
 
   [multi gpu training]
     python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --data data/fujinolab-all.yaml
-    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --data data/fujinolab-all.yaml --hyp data/hyps/labeled_only.yaml --cfg models/yolov5m-1cls.yaml
-  [with sync batch norm]
-    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --data data/fujinolab-all.yaml --device 0,1 --sync-bn
+    python -m torch.distributed.run --nproc_per_node 2 train.py --batch-size 16 --device 0,1 --hyp data/hyps/time_zone.yaml --cfg models/yolov5m-1cls.yaml --data data/fujinolab-night.yaml --name fujinolab-night-v5-std
 
 [val]
   python val.py --weights weights/fujinolab-all.pt --data data/fujinolab-all.yaml  --exist-ok

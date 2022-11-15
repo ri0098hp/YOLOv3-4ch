@@ -503,6 +503,7 @@ class LoadImagesAndLabels(Dataset):
         self.path = data_path
         self.albumentations = Albumentations() if augment else None
         print()
+
         # Define image files --------------------------------------------------------------------------------------
         path = str(Path(data_path))
         os.makedirs(path + os.sep + "cache", exist_ok=True)
@@ -523,14 +524,18 @@ class LoadImagesAndLabels(Dataset):
                 fs = []  # ファイルパス
                 for dir in dirs:  # 日付ディレクトリごとに探索
                     # RGBフォルダ下の画像を探索
-                    f: list = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
+                    f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
                     f = [x for x in f if x.split(".")[-1].lower() in IMG_FORMATS]
                     f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
 
                     # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
-                    spl: list = split_list(f, 10)
-                    idx_train = [0, 1, 2, 4, 6, 7, 8]
-                    idx_val = [3, 5, 9]
+                    spl = split_list(f, 10)
+                    if "pos_imgs" in hyp.keys():
+                        idx_train = [0, 2, 5, 6, 7]
+                        idx_val = [1, 3, 4, 8, 9]
+                    else:
+                        idx_train = [0, 1, 2, 4, 6, 7, 8]
+                        idx_val = [3, 5, 9]
                     # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
                     try:
                         d: int = int(re.sub(r"\D", "", dir))
@@ -569,13 +574,30 @@ class LoadImagesAndLabels(Dataset):
             else:  # labels in same folder
                 self.label_files.append(f.replace(os.path.splitext(x)[-1], ".txt"))
 
-        # remove path without labels
-        idx = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]
-        ratio = hyp["ignore_rate"]
-        if ratio != 0:
+        # Reorder dataset --------------------------------------------------------------------------------------
+        # limitting numbers of data
+        pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
+        pos_num = len(pos_id)  # number of found labels
+        if "pos_imgs" in hyp.keys():
+            target_num = hyp["pos_imgs"]
+            assert target_num < pos_num, f"{prefix}please check your hyp[pos_imgs], must be less than {pos_num}"
+            random.seed(0)
+            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
+            idx = random.sample(pos_id, pos_num - target_num)
             for i in sorted(idx, reverse=True):
-                if i % int(ratio * 100) == 0:
-                    continue
+                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+            pos_num = target_num
+
+        # remove path without labels
+        neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
+        neg_num = len(neg_id)  # number of missed labels
+        if "neg_ratio" in hyp.keys():
+            target_num = pos_num * hyp["neg_ratio"]
+            assert target_num < neg_num, f"{prefix}please check your hyp[neg_ratio], must be {target_num} < {neg_num}"
+            random.seed(0)
+            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
+            idx = random.sample(neg_id, int(neg_num - target_num))
+            for i in sorted(idx, reverse=True):
                 self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
 
         # order pair check
@@ -584,6 +606,7 @@ class LoadImagesAndLabels(Dataset):
         assert tf, "RGB-FIR images missing pair"
         tf = re.split(f"[.|{os.sep}]", self.img_files[-1])[-2] == re.split(f"[.|{os.sep}]", self.label_files[-1])[-2]
         assert tf, "img and label missing pair"
+        # end of custom code --------------------------------------------------------------------------------------
 
         # Check cache - data_pathの直下にcacheフォルダ作成
         cache_path = os.path.join(path, "cache", f"{is_train}_labels.npy")
@@ -610,7 +633,6 @@ class LoadImagesAndLabels(Dataset):
             f"FIR: {len(self.img_files_ir)} files\n"
             f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
             f"non-labeled images are {int(100*(nm+ne+nc)/(nf+nm+ne+nc))}% in all\n"
-            f"suggest ignore_rate is {float(nf)*0.05/(float(nm+ne+nc)*(1.0-0.05)):.5}\n"
             "##########################\n"
         )
         if is_train == "train" and os.path.isfile(loading_log_path):
