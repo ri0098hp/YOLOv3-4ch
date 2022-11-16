@@ -580,7 +580,7 @@ class LoadImagesAndLabels(Dataset):
         pos_num = len(pos_id)  # number of found labels
         if "pos_imgs" in hyp.keys():
             target_num = hyp["pos_imgs"]
-            assert target_num < pos_num, f"{prefix}please check your hyp[pos_imgs], must be less than {pos_num}"
+            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs], must be less than {pos_num}"
             random.seed(0)
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
             idx = random.sample(pos_id, pos_num - target_num)
@@ -593,7 +593,7 @@ class LoadImagesAndLabels(Dataset):
         neg_num = len(neg_id)  # number of missed labels
         if "neg_ratio" in hyp.keys():
             target_num = pos_num * hyp["neg_ratio"]
-            assert target_num < neg_num, f"{prefix}please check your hyp[neg_ratio], must be {target_num} < {neg_num}"
+            assert target_num <= neg_num, f"{prefix}please check your neg_ratio, must be less than {neg_num/pos_num}"
             random.seed(0)
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
             idx = random.sample(neg_id, int(neg_num - target_num))
@@ -704,7 +704,10 @@ class LoadImagesAndLabels(Dataset):
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
+            if nchannel == 4:
+                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image_multi(*x), zip(repeat(self), range(n)))
+            else:
+                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == "disk":
