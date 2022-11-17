@@ -17,14 +17,14 @@ obj: 1.0 # obj loss gain (scale with pixels)
 obj_pw: 1.0 # obj BCELoss positive_weight
 iou_t: 0.20 # IoU training threshold
 anchor_t: 4.0 # anchor-multiple threshold
-fl_gamma: 0.0 # focal loss gamma (efficientDet default is gamma=1.5)
-hsv_h: 0.0 # image HSV-Hue augmentation (fraction)
-hsv_s: 0.0 # image HSV-Saturation augmentation (fraction)
-hsv_v: 0.0 # image HSV-Value augmentation (fraction)
-degrees: 0 # image rotation (+/- deg)
-translate: 0 # image translation (+/- fraction)
-scale: 0 # image scale (+/- gain)
-shear: 0 # image shear (+/- deg)
+fl_gamma: 0.0 # focal loss gamma (efficientDet default gamma=1.5)
+hsv_h: 0.015 # image HSV-Hue augmentation (fraction)
+hsv_s: 0.7 # image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4 # image HSV-Value augmentation (fraction)
+degrees: 0.0 # image rotation (+/- deg)
+translate: 0.1 # image translation (+/- fraction)
+scale: 0.5 # image scale (+/- gain)
+shear: 0.0 # image shear (+/- deg)
 perspective: 0.0 # image perspective (+/- fraction), range 0-0.001
 flipud: 0.0 # image flip up-down (probability)
 fliplr: 0.5 # image flip left-right (probability)
@@ -32,6 +32,5 @@ mosaic: 1.0 # image mosaic (probability)
 mixup: 0.0 # image mixup (probability)
 copy_paste: 0.0 # segment copy-paste (probability)
 
-ignore_rate: 0.0 # ignore rate of images without labels (probability)
-# giou: 2.54 # giou loss gain
-# anchors: 3  # anchors per output layer (0 to ignore)
+# pos_imgs: 100 # number of labeled images to use (optionally)
+# neg_ratio: 1.0 # ratio of non-labeled images to labeled ones (optionally)

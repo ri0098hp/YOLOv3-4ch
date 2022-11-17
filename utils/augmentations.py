@@ -51,7 +51,11 @@ class Albumentations:
 def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
     # HSV color-space augmentation
     if hgain or sgain or vgain:
-        r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+        nch = im.shape[2]
+        if nch == 4:
+            b, g, r, ir = cv2.split(im)
+            im = cv2.merge((b, g, r))
+        r = np.random.uniform(-1, 1, 4) * [hgain, sgain, vgain, vgain] + 1  # random gains
         hue, sat, val = cv2.split(cv2.cvtColor(im, cv2.COLOR_BGR2HSV))
         dtype = im.dtype  # uint8
 
@@ -59,9 +63,12 @@ def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
         lut_hue = ((x * r[0]) % 180).astype(dtype)
         lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
         lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
+        lut_gray = np.clip(x * r[2], 0, 255).astype(dtype)
 
         im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
         cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=im)  # no return needed
+        if nch == 4:
+            im = cv2.merge((im, cv2.LUT(ir, lut_gray)))
 
 
 def hist_equalize(im, clahe=True, bgr=False):
