@@ -780,7 +780,7 @@ class LoadImagesAndLabels(Dataset):
 
             # MixUp augmentation
             if random.random() < hyp["mixup"]:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1)))
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), self.nchannel))
 
         else:
             # Load image
