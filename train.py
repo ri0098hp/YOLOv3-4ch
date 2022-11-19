@@ -36,7 +36,6 @@ from utils.general import (
     NCOLS,
     check_dataset,
     check_file,
-    check_git_status,
     check_img_size,
     check_requirements,
     check_suffix,
@@ -578,7 +577,6 @@ def main(opt, callbacks=Callbacks()):
     # Checks
     if RANK in [-1, 0]:
         print_args(FILE.stem, opt)
-        check_git_status()
         check_requirements(exclude=["thop"])
 
     # Resume
