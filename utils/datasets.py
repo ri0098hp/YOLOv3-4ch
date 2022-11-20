@@ -550,8 +550,8 @@ class LoadImagesAndLabels(Dataset):
                         for id in idx_val:
                             fs += spl[id]
                         show_selected(dir, idx_val)
-            if is_train == "val":
-                print("□ is train group, ■ is val group\n")
+                if is_train == "val":
+                    print("□ is train group, ■ is val group\n")
             # self.img_files = random.sample(fs, len(fs)) # slide data
             self.img_files = fs
         except Exception:
