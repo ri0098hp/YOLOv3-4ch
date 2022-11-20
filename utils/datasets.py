@@ -550,8 +550,8 @@ class LoadImagesAndLabels(Dataset):
                         for id in idx_val:
                             fs += spl[id]
                         show_selected(dir, idx_val)
-            if is_train == "val":
-                print("□ is train group, ■ is val group\n")
+                if is_train == "val":
+                    print("□ is train group, ■ is val group\n")
             # self.img_files = random.sample(fs, len(fs)) # slide data
             self.img_files = fs
         except Exception:
@@ -569,10 +569,7 @@ class LoadImagesAndLabels(Dataset):
             x = f.replace(os.sep + fir_folder + os.sep, os.sep + labels_folder + os.sep)
             # change path img file to txt file
             label_fp = x.replace(os.path.splitext(x)[-1], ".txt")
-            if os.path.exists(label_fp):
-                self.label_files.append(label_fp)
-            else:  # labels in same folder
-                self.label_files.append(f.replace(os.path.splitext(x)[-1], ".txt"))
+            self.label_files.append(label_fp)
 
         # Reorder dataset --------------------------------------------------------------------------------------
         # limitting numbers of data
@@ -780,7 +777,7 @@ class LoadImagesAndLabels(Dataset):
 
             # MixUp augmentation
             if random.random() < hyp["mixup"]:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1)))
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), self.nchannel))
 
         else:
             # Load image
@@ -833,6 +830,12 @@ class LoadImagesAndLabels(Dataset):
                 if nl:
                     labels[:, 1] = 1 - labels[:, 1]
 
+            # bitwised FIR image
+            if "flipbw" in hyp.keys():
+                if random.random() < hyp["flipbw"] and self.nchannel == 4:
+                    b, g, r, ir = cv2.split(img)
+                    img = cv2.merge((b, g, r, cv2.bitwise_not(ir)))
+
             # Cutouts
             # labels = cutout(img, labels, p=0.5)
 
@@ -841,7 +844,7 @@ class LoadImagesAndLabels(Dataset):
             labels_out[:, 1:] = torch.from_numpy(labels)
 
         # Convert
-        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGRg to gRGB
         img = np.ascontiguousarray(img)
 
         return torch.from_numpy(img), labels_out, self.img_files[index], shapes
