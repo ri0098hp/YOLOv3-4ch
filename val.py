@@ -284,7 +284,7 @@ def run(
             Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Plot images
-    if plots and (res):  # 推測と正解ラベル数が計20以上
+    if plots and res:  # 推測と正解ラベル数が計20以上
         batch_i, im, targets, out, paths, names = res
         f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
         Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()

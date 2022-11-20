@@ -36,7 +36,6 @@ from utils.general import (
     NCOLS,
     check_dataset,
     check_file,
-    check_git_status,
     check_img_size,
     check_requirements,
     check_suffix,
@@ -533,9 +532,9 @@ def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", type=str, default="", help="initial weights path")
     parser.add_argument("--cfg", type=str, default="models/yolov3-spp-1cls.yaml", help="model.yaml path")
-    parser.add_argument("--data", type=str, default="data/debug.yaml", help="dataset.yaml path")
+    parser.add_argument("--data", type=str, default="data/fujinolab-all.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/default.yaml", help="hyperparameters path")
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=-1, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
@@ -578,7 +577,6 @@ def main(opt, callbacks=Callbacks()):
     # Checks
     if RANK in [-1, 0]:
         print_args(FILE.stem, opt)
-        check_git_status()
         check_requirements(exclude=["thop"])
 
     # Resume
