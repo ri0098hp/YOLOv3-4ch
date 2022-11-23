@@ -621,23 +621,6 @@ class LoadImagesAndLabels(Dataset):
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
         assert nf > 0 or not augment, f"{prefix}No labels in {cache_path}. See {HELP_URL}"
 
-        # save log files of loading
-        loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
-        msg = (
-            "##########################\n"
-            f"{is_train} data has ...\n"
-            f"RGB: {len(self.img_files)} files\n"
-            f"FIR: {len(self.img_files_ir)} files\n"
-            f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
-            f"non-labeled images are {int(100*(nm+ne+nc)/(nf+nm+ne+nc))}% in all\n"
-            "##########################\n"
-        )
-        if is_train == "train" and os.path.isfile(loading_log_path):
-            os.remove(loading_log_path)
-        with open(loading_log_path, "a+") as f:
-            f.write(msg)
-            LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
-
         # Read cache
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
         labels, shapes, self.segments = zip(*cache.values())
@@ -716,6 +699,24 @@ class LoadImagesAndLabels(Dataset):
                     gb += self.imgs[i].nbytes
                 pbar.desc = f"{prefix}Caching images ({gb / 1E9:.1f}GB {cache_images})"
             pbar.close()
+
+        # save log files of loading
+        loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
+        msg = (
+            "##########################\n"
+            f"{is_train} data has ...\n"
+            f"RGB: {len(self.img_files)} files\n"
+            f"FIR: {len(self.img_files_ir)} files\n"
+            f"lables: {sum(len(v) for v in list(labels))} target\n"
+            f"label files: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
+            "##########################\n"
+        )
+        print(msg)
+        if is_train == "train" and os.path.isfile(loading_log_path):
+            os.remove(loading_log_path)
+        with open(loading_log_path, "a+") as f:
+            f.write(msg)
+            LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
 
     def cache_labels(self, path=Path("./labels.cache"), prefix=""):
         # Cache dataset labels, check images and read shapes
