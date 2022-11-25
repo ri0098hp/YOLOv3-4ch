@@ -14,19 +14,24 @@ LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))
 
 def main():
     data_dict = None
-    data = f"data/{input('name of data: ')}.yaml"
-    with open("data/hyps/study.yaml", errors="ignore") as f:
-        hyp = yaml.safe_load(f)
+    data_name = input("name of data: ")
+    if os.path.exists(f"data/hyps/custom-{data_name}.yaml"):
+        with open(f"data/hyps/custom-{data_name}.yaml", errors="ignore") as f:
+            hyp = yaml.safe_load(f)
+    else:
+        with open("data/hyps/study.yaml", errors="ignore") as f:
+            hyp = yaml.safe_load(f)
+
     with torch_distributed_zero_first(LOCAL_RANK):
-        data_dict = data_dict or check_dataset(data)  # check if None
+        data_dict = check_dataset(f"data/{data_name}.yaml")  # check if None
     data_path = data_dict["data_path"]
     rgb_dir, fir_dir = data_dict["rgb_folder"], data_dict["fir_folder"]
     labels_dir = data_dict["labels_folder"]
     nch = data_dict["ch"]
     with open("data/custom.yaml", "w") as f:
         yaml.safe_dump(data_dict, f, sort_keys=False)
+    print("pos_imgs_train:", hyp["pos_imgs_train"])
     while True:
-        print(hyp["pos_imgs"])
         try:
             train_loader, dataset = create_dataloader(
                 "train",
@@ -52,13 +57,46 @@ def main():
             )
         except PermissionError:
             pass
-
-        p = int(input("pos_imgs: "))
-        with open("data/hyps/custom.yaml", "w") as f:
+        p = int(input("pos_imgs_train: "))
+        with open(f"data/hyps/custom-{data_name}.yaml", "w") as f:
             yaml.safe_dump(hyp, f, sort_keys=False)
         if p == 0:
             break
-        hyp["pos_imgs"] = p
+        hyp["pos_imgs_train"] = p
+
+    print("pos_imgs_val:", hyp["pos_imgs_val"])
+    while True:
+        try:
+            train_loader, dataset = create_dataloader(
+                "val",
+                data_path,
+                rgb_dir,
+                fir_dir,
+                labels_dir,
+                nch,
+                640,
+                1,
+                32,
+                single_cls=True,
+                hyp=hyp,
+                augment=True,
+                cache=False,
+                rect=False,
+                rank=-1,
+                workers=1,
+                image_weights=False,
+                quad=False,
+                prefix="val: ",
+                shuffle=True,
+            )
+        except PermissionError:
+            pass
+        p = int(input("pos_imgs_val: "))
+        with open(f"data/hyps/custom-{data_name}.yaml", "w") as f:
+            yaml.safe_dump(hyp, f, sort_keys=False)
+        if p == 0:
+            break
+        hyp["pos_imgs_val"] = p
 
 
 if __name__ == "__main__":

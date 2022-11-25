@@ -530,7 +530,7 @@ class LoadImagesAndLabels(Dataset):
 
                     # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
                     spl = split_list(f, 10)
-                    if "pos_imgs" in hyp.keys():
+                    if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
                         idx_train = [0, 2, 5, 6, 7]
                         idx_val = [1, 3, 4, 8, 9]
                     else:
@@ -572,12 +572,23 @@ class LoadImagesAndLabels(Dataset):
             self.label_files.append(label_fp)
 
         # Reorder dataset --------------------------------------------------------------------------------------
-        # limitting numbers of data
+        # limitting numbers of data on training
         pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
         pos_num = len(pos_id)  # number of found labels
-        if "pos_imgs" in hyp.keys():
-            target_num = hyp["pos_imgs"]
-            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs], must be less than {pos_num}"
+        if is_train == "train" and "pos_imgs_train" in hyp.keys():
+            target_num = hyp["pos_imgs_train"]
+            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_train], must be less than {pos_num}"
+            random.seed(0)
+            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
+            idx = random.sample(pos_id, pos_num - target_num)
+            for i in sorted(idx, reverse=True):
+                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+            pos_num = target_num
+
+        # limitting numbers of data on testing
+        if is_train == "val" and "pos_imgs_val" in hyp.keys():
+            target_num = hyp["pos_imgs_val"]
+            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_val], must be less than {pos_num}"
             random.seed(0)
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
             idx = random.sample(pos_id, pos_num - target_num)
