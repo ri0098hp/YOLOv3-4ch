@@ -19,7 +19,7 @@ def main():
         with open(f"data/hyps/custom-{data_name}.yaml", errors="ignore") as f:
             hyp = yaml.safe_load(f)
     else:
-        with open("data/hyps/study.yaml", errors="ignore") as f:
+        with open("data/hyps/default.yaml", errors="ignore") as f:
             hyp = yaml.safe_load(f)
 
     with torch_distributed_zero_first(LOCAL_RANK):
@@ -30,7 +30,8 @@ def main():
     nch = data_dict["ch"]
     with open("data/custom.yaml", "w") as f:
         yaml.safe_dump(data_dict, f, sort_keys=False)
-    print("pos_imgs_train:", hyp["pos_imgs_train"])
+    if "pos_imgs_train" in hyp.keys():
+        print("pos_imgs_train:", hyp["pos_imgs_train"])
     while True:
         try:
             train_loader, dataset = create_dataloader(
@@ -64,7 +65,8 @@ def main():
             break
         hyp["pos_imgs_train"] = p
 
-    print("pos_imgs_val:", hyp["pos_imgs_val"])
+    if "pos_imgs_val" in hyp.keys():
+        print("pos_imgs_val:", hyp["pos_imgs_val"])
     while True:
         try:
             train_loader, dataset = create_dataloader(
