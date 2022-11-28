@@ -530,7 +530,7 @@ class LoadImagesAndLabels(Dataset):
 
                     # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
                     spl = split_list(f, 10)
-                    if "pos_imgs" in hyp.keys():
+                    if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
                         idx_train = [0, 2, 5, 6, 7]
                         idx_val = [1, 3, 4, 8, 9]
                     else:
@@ -572,12 +572,23 @@ class LoadImagesAndLabels(Dataset):
             self.label_files.append(label_fp)
 
         # Reorder dataset --------------------------------------------------------------------------------------
-        # limitting numbers of data
+        # limitting numbers of data on training
         pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
         pos_num = len(pos_id)  # number of found labels
-        if "pos_imgs" in hyp.keys():
-            target_num = hyp["pos_imgs"]
-            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs], must be less than {pos_num}"
+        if is_train == "train" and "pos_imgs_train" in hyp.keys():
+            target_num = hyp["pos_imgs_train"]
+            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_train], must be less than {pos_num}"
+            random.seed(0)
+            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
+            idx = random.sample(pos_id, pos_num - target_num)
+            for i in sorted(idx, reverse=True):
+                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+            pos_num = target_num
+
+        # limitting numbers of data on testing
+        if is_train == "val" and "pos_imgs_val" in hyp.keys():
+            target_num = hyp["pos_imgs_val"]
+            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_val], must be less than {pos_num}"
             random.seed(0)
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
             idx = random.sample(pos_id, pos_num - target_num)
@@ -620,23 +631,6 @@ class LoadImagesAndLabels(Dataset):
             d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
         assert nf > 0 or not augment, f"{prefix}No labels in {cache_path}. See {HELP_URL}"
-
-        # save log files of loading
-        loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
-        msg = (
-            "##########################\n"
-            f"{is_train} data has ...\n"
-            f"RGB: {len(self.img_files)} files\n"
-            f"FIR: {len(self.img_files_ir)} files\n"
-            f"labels: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
-            f"non-labeled images are {int(100*(nm+ne+nc)/(nf+nm+ne+nc))}% in all\n"
-            "##########################\n"
-        )
-        if is_train == "train" and os.path.isfile(loading_log_path):
-            os.remove(loading_log_path)
-        with open(loading_log_path, "a+") as f:
-            f.write(msg)
-            LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
 
         # Read cache
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
@@ -716,6 +710,24 @@ class LoadImagesAndLabels(Dataset):
                     gb += self.imgs[i].nbytes
                 pbar.desc = f"{prefix}Caching images ({gb / 1E9:.1f}GB {cache_images})"
             pbar.close()
+
+        # save log files of loading
+        loading_log_path = str(Path(cache_path).parent) + os.sep + "loading_log.txt"
+        msg = (
+            "##########################\n"
+            f"{is_train} data has ...\n"
+            f"RGB: {len(self.img_files)} files\n"
+            f"FIR: {len(self.img_files_ir)} files\n"
+            f"lables: {sum(len(v) for v in list(labels))} target\n"
+            f"label files: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
+            "##########################\n"
+        )
+        print(msg)
+        if is_train == "train" and os.path.isfile(loading_log_path):
+            os.remove(loading_log_path)
+        with open(loading_log_path, "a+") as f:
+            f.write(msg)
+            LOGGER.info(f"{prefix}DataLoader info save on: {loading_log_path}")
 
     def cache_labels(self, path=Path("./labels.cache"), prefix=""):
         # Cache dataset labels, check images and read shapes
