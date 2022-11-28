@@ -22,7 +22,7 @@ while getopts "abdersh" optKey; do
       docker build -t yolov3-okuda:latest .
       ;;
     d)
-      docker run --name YOLOv3-okuda-debug --gpus all -it --shm-size=12g --ipc=host --rm \
+      docker run --name YOLOv3-okuda-debug --gpus all -it --shm-size=16g --ipc=host --rm \
       --mount type=bind,source="$(pwd)",target=/usr/src/app/ \
       --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
       yolov3-okuda:test
@@ -31,7 +31,7 @@ while getopts "abdersh" optKey; do
       docker start -i YOLOv3-okuda
       ;;
     r)
-      docker run --name YOLOv3-okuda --gpus all -it --shm-size=12g --ipc=host \
+      docker run --name YOLOv3-okuda --gpus all -it --shm-size=16g --ipc=host \
       --mount type=bind,source="$(pwd)"/data,target=/usr/src/app/data \
       --mount type=bind,source="$(pwd)"/dataset,target=/usr/src/app/dataset \
       --mount type=bind,source="$(pwd)"/weights,target=/usr/src/app/weights \
