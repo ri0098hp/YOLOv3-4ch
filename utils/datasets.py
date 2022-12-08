@@ -533,6 +533,8 @@ class LoadImagesAndLabels(Dataset):
                     if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
                         idx_train = [0, 2, 5, 6, 7]
                         idx_val = [1, 3, 4, 8, 9]
+                        # idx_train = [1, 3, 4, 8, 7]
+                        # idx_val = [0, 2, 5, 6, 9]
                     else:
                         idx_train = [0, 1, 2, 4, 6, 7, 8]
                         idx_val = [3, 5, 9]
