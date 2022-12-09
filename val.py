@@ -180,14 +180,14 @@ def run(
             model(torch.zeros(1, 4, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
         pad = 0.0 if task == "speed" else 0.5
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
-        nchannels = data["ch"]
+        ch = data["ch"]
         dataloader = create_dataloader(
             "val",
             data["data_path"],
             data["rgb_folder"],
             data["fir_folder"],
             data["labels_folder"],
-            nchannels,
+            ch,
             imgsz,
             batch_size,
             stride,
@@ -284,7 +284,7 @@ def run(
             Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Plot images
-    if plots and res:  # 推測と正解ラベル数が計20以上
+    if plots and res:  # ターゲット数が最も多い画像を取得
         batch_i, im, targets, out, paths, names = res
         f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
         Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()

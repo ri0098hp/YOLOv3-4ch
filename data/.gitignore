@@ -1,1 +1,5 @@
-custom*
+*
+!hyps
+!fujinolab-all.yaml
+!fujinolab-all-*ch.yaml
+!kaist-all.yaml

@@ -236,14 +236,12 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
     ns = np.ceil(bs**0.5)  # number of subplots (square)
 
     # Build Image
-    nchannel = images[0].shape[0]
-    mosaic = np.full((int(ns * h), int(ns * w), nchannel), 255, dtype=np.uint8)  # init
+    ch = images[0].shape[0]
+    mosaic = np.full((int(ns * h), int(ns * w), ch), 255, dtype=np.uint8)  # init
+
     # add okuda: color for multi channels
-    grid_color = (0, 0, 0)
-    txt_color = (255, 255, 255)
-    if nchannel == 4:
-        grid_color += (0,)
-        txt_color += (255,)
+    grid_color = (0,) * ch
+    txt_color = (255,) * ch
 
     for i, im in enumerate(images):
         if i == max_subplots:  # if last batch has fewer images than we expect
@@ -261,7 +259,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
 
     # Annotate
     fs = int((h + w) * ns * 0.01)  # font size
-    annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True)
+    annotator = Annotator(np.squeeze(mosaic), line_width=round(fs / 10), font_size=fs, pil=True)
     for i in range(i + 1):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         annotator.rectangle([x, y, x + w, y + h], None, grid_color, width=2)  # borders
@@ -284,19 +282,26 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None, max
             boxes[[1, 3]] += y
             for j, box in enumerate(boxes.T.tolist()):
                 cls = classes[j]
-                color = (0,) + colors(cls) if nchannel == 4 else colors(cls)
+                if ch == 1 or ch == 2:
+                    color = (0,) * ch
+                else:
+                    color = (0,) * (ch - 3) + colors(cls)
                 cls = names[cls] if names else cls
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = f"{cls}" if labels else f"{cls} {conf[j]:.1f}"
                     annotator.box_label(box, label, color=color, txt_color=txt_color)
 
     # add okuda : multi channels img save
-    if nchannel == 4:
+    if ch == 2:
         fname = str(fname)
-        ir, r, g, b = annotator.im.split()
+        mosaic_ir, mosaic = annotator.im.split()
+        mosaic.save(fname[:-4] + "_rgb.jpg")
+        mosaic_ir.save(fname[:-4] + "_fir.jpg")
+    elif ch == 4:
+        fname = str(fname)
+        mosaic_ir, r, g, b = annotator.im.split()
         mosaic = Image.merge("RGB", (r, g, b))
         mosaic.save(fname[:-4] + "_rgb.jpg")
-        mosaic_ir = Image.merge("RGB", (ir, ir, ir))  # convert GRAY to RGB
         mosaic_ir.save(fname[:-4] + "_fir.jpg")
     else:
         annotator.im.save(fname)  # save
