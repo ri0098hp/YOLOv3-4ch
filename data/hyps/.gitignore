@@ -1,0 +1,6 @@
+*
+!.gitignore
+!default.yaml
+!labeled_only.yaml
+!study.yaml
+!hyp.*

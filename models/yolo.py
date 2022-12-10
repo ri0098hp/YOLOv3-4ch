@@ -11,12 +11,6 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-FILE = Path(__file__).resolve()
-ROOT = FILE.parents[1]  # root directory
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))  # add ROOT to PATH
-# ROOT = ROOT.relative_to(Path.cwd())  # relative
-
 from models.common import *
 from models.experimental import *
 from utils.autoanchor import check_anchor_order
@@ -31,6 +25,13 @@ from utils.torch_utils import (
     select_device,
     time_sync,
 )
+
+FILE = Path(__file__).resolve()
+ROOT = FILE.parents[1]  # root directory
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))  # add ROOT to PATH
+# ROOT = ROOT.relative_to(Path.cwd())  # relative
+
 
 try:
     import thop  # for FLOPs computation
@@ -110,7 +111,7 @@ class Model(nn.Module):
         # Define model
         self.yaml["ch"] = ch  # input channels
         if nc and nc != self.yaml["nc"]:
-            LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
+            LOGGER.info(f"Overriding model.yaml nc={self.yaml['ch']} with nc={nc}")
             self.yaml["nc"] = nc  # override yaml value
         if anchors:
             LOGGER.info(f"Overriding model.yaml anchors with anchors={anchors}")

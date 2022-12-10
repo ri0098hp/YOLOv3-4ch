@@ -135,7 +135,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
     data_path = data_dict["data_path"]
     rgb_dir, fir_dir = data_dict["rgb_folder"], data_dict["fir_folder"]
     labels_dir = data_dict["labels_folder"]
-    nch = data_dict["ch"]
+    ch = data_dict["ch"]
 
     nc = 1 if single_cls else int(data_dict["nc"])  # number of classes
     names = ["item"] if single_cls and len(data_dict["names"]) != 1 else data_dict["names"]  # class names
@@ -149,14 +149,14 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
         with torch_distributed_zero_first(LOCAL_RANK):
             weights = attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt["model"].yaml, ch=nch, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
+        model = Model(cfg or ckpt["model"].yaml, ch=ch, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
         exclude = ["anchor"] if (cfg or hyp.get("anchors")) and not resume else []  # exclude keys
         csd = ckpt["model"].float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(csd, strict=False)  # load
         LOGGER.info(f"Transferred {len(csd)}/{len(model.state_dict())} items from {weights}")  # report
     else:
-        model = Model(cfg, ch=nch, anchors=hyp.get("anchors")).to(device)  # create
+        model = Model(cfg, ch=ch, anchors=hyp.get("anchors")).to(device)  # create
 
     # Freeze
     freeze = [f"model.{x}." for x in range(freeze)]  # layers to freeze
@@ -172,7 +172,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
 
     # Batch size
     if RANK == -1 and batch_size == -1:  # single-GPU only, estimate best batch size
-        batch_size = check_train_batch_size(model, imgsz, nch)
+        batch_size = check_train_batch_size(model, imgsz, ch)
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -257,7 +257,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
         rgb_dir,
         fir_dir,
         labels_dir,
-        nch,
+        ch,
         imgsz,
         batch_size // WORLD_SIZE,
         gs,
@@ -285,7 +285,7 @@ def train(hyp, opt, device, callbacks):  # path/to/hyp.yaml or hyp dictionary
             rgb_dir,
             fir_dir,
             labels_dir,
-            nch,
+            ch,
             imgsz,
             batch_size // WORLD_SIZE * 2,
             gs,
