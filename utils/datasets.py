@@ -118,7 +118,7 @@ def create_dataloader(
     rgb_folder,
     fir_folder,
     labels_folder,
-    nchannel,
+    ch,
     imgsz,
     batch_size,
     stride,
@@ -145,7 +145,7 @@ def create_dataloader(
             rgb_folder,
             fir_folder,
             labels_folder,
-            nchannel,
+            ch,
             imgsz,
             batch_size,
             augment=augment,  # augmentation
@@ -158,7 +158,6 @@ def create_dataloader(
             image_weights=image_weights,
             prefix=prefix,
         )
-
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // WORLD_SIZE, batch_size if batch_size > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
@@ -217,11 +216,11 @@ class _RepeatSampler:
 
 class LoadImages:
     #  image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
-    def __init__(self, path, nchannel=3, img_size=640, stride=32, auto=True):
+    def __init__(self, path, ch=3, img_size=640, stride=32, auto=True):
         path = str(Path(path))  # os-agnostic
         files = []
         if os.path.isdir(path):
-            if nchannel == 4:
+            if ch == 4:
                 RGB_file = sorted(glob.glob(os.path.join(path, "RGB", "*.*")))
                 IR_file = sorted(glob.glob(os.path.join(path, "FIR", "*.*")))
             else:
@@ -233,7 +232,7 @@ class LoadImages:
 
         videos = [x for x in files if x.split(".")[-1].lower() in VID_FORMATS]
         nv = len(videos)
-        if nchannel == 4:
+        if ch == 4:
             images_RGB = [x for x in RGB_file if x.split(".")[-1].lower() in IMG_FORMATS]
             images_IR = [x for x in IR_file if x.split(".")[-1].lower() in IMG_FORMATS]
             # a pair, so not counting 2 different images, assuming no videos
@@ -245,7 +244,7 @@ class LoadImages:
             self.files = images + videos
             ni, nv = len(images), len(videos)
 
-        self.nchannel = nchannel
+        self.ch = ch
         self.img_size = img_size
         self.stride = stride
         self.nf = ni + nv  # number of files
@@ -269,7 +268,7 @@ class LoadImages:
         if self.count == self.nf:
             raise StopIteration
 
-        if self.nchannel == 4:
+        if self.ch == 4:
             path_RGB = self.img_RGB[self.count]
             path_IR = self.img_IR[self.count]
         else:
@@ -296,9 +295,9 @@ class LoadImages:
             # Read image
             self.count += 1
             s = f"image {self.count}: "
-            if self.nchannel == 1:
+            if self.ch == 1:
                 img0 = cv2.imread(path, 0)  # grayscale
-            elif self.nchannel == 4:
+            elif self.ch == 4:
                 img_rgb = cv2.imread(path_RGB)
                 img_ir = cv2.imread(path_IR, 0)
 
@@ -307,7 +306,7 @@ class LoadImages:
             else:
                 img0 = cv2.imread(path)  # BGR / 3 channel
 
-            if self.nchannel == 4:
+            if self.ch == 4:
                 assert img0 is not None, "Image Not Found " + path_RGB
                 assert img0 is not None, "Image Not Found " + path_IR
             else:
@@ -479,7 +478,7 @@ class LoadImagesAndLabels(Dataset):
         rgb_folder,
         fir_folder,
         labels_folder,
-        nchannel=3,
+        ch=3,
         img_size=640,
         batch_size=16,
         augment=False,
@@ -505,6 +504,7 @@ class LoadImagesAndLabels(Dataset):
         print()
 
         # Define image files --------------------------------------------------------------------------------------
+        self.img_files = []
         path = str(Path(data_path))
         os.makedirs(path + os.sep + "cache", exist_ok=True)
         try:
@@ -521,52 +521,23 @@ class LoadImagesAndLabels(Dataset):
                 fs = [x for x in fs if x.split(".")[-1].lower() in IMG_FORMATS]
                 fs.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
             else:  # 自作データセットの場合はディレクトリごとに割合で振り分け
-                fs = []  # ファイルパス
-                for dir in dirs:  # 日付ディレクトリごとに探索
-                    # RGBフォルダ下の画像を探索
-                    f = sorted(glob.iglob(os.path.join(dir, rgb_folder, "*.*"), recursive=True))
-                    f = [x for x in f if x.split(".")[-1].lower() in IMG_FORMATS]
-                    f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
-
-                    # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
-                    spl = split_list(f, 10)
-                    if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
-                        idx_train = [0, 2, 5, 6, 7]
-                        idx_val = [1, 3, 4, 8, 9]
-                    else:
-                        idx_train = [0, 1, 2, 4, 6, 7, 8]
-                        idx_val = [3, 5, 9]
-                    # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
-                    try:
-                        d: int = int(re.sub(r"\D", "", dir))
-                    except Exception:
-                        d: int = ord(dir[-2])
-                    idx_train = list(map(lambda x: (x + d) % 10, idx_train))
-                    idx_val = list(map(lambda x: (x + d) % 10, idx_val))
-                    if is_train == "train":
-                        for id in idx_train:
-                            fs += spl[id]
-                    else:
-                        for id in idx_val:
-                            fs += spl[id]
-                        show_selected(dir, idx_val)
-                if is_train == "val":
-                    print("□ is train group, ■ is val group\n")
-            # self.img_files = random.sample(fs, len(fs)) # slide data
-            self.img_files = fs
+                if ch == 1:  # FIR only
+                    fs = get_imgs_path(dirs, fir_folder, hyp, is_train)
+                else:  # RGB only, RGB-FIR
+                    fs = get_imgs_path(dirs, rgb_folder, hyp, is_train)
+                self.img_files = fs
         except Exception:
             raise Exception(f"Error loading data from {path}. See {HELP_URL}")
 
-        # loading FIR images from RGB image path
-        target = os.sep + rgb_folder + os.sep
-        dst = os.sep + fir_folder + os.sep
-        self.img_files_ir = [x.replace(target, dst) for x in self.img_files]
+        # define base folder of pathes
+        base = fir_folder if ch == 1 else rgb_folder
+        base = os.sep + base + os.sep
 
         # Define labels --------------------------------------------------------------------------------------
         self.label_files = []
-        for f in self.img_files_ir:
+        for f in self.img_files:
             # change path fir folder to label folder
-            x = f.replace(os.sep + fir_folder + os.sep, os.sep + labels_folder + os.sep)
+            x = f.replace(base, os.sep + labels_folder + os.sep)
             # change path img file to txt file
             label_fp = x.replace(os.path.splitext(x)[-1], ".txt")
             self.label_files.append(label_fp)
@@ -582,7 +553,7 @@ class LoadImagesAndLabels(Dataset):
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
             idx = random.sample(pos_id, pos_num - target_num)
             for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+                self.label_files.pop(i), self.img_files.pop(i)
             pos_num = target_num
 
         # limitting numbers of data on testing
@@ -593,7 +564,7 @@ class LoadImagesAndLabels(Dataset):
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
             idx = random.sample(pos_id, pos_num - target_num)
             for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
+                self.label_files.pop(i), self.img_files.pop(i)
             pos_num = target_num
 
         # remove path without labels
@@ -606,14 +577,7 @@ class LoadImagesAndLabels(Dataset):
             # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
             idx = random.sample(neg_id, int(neg_num - target_num))
             for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i), self.img_files_ir.pop(i)
-
-        # order pair check
-        # 拡張子を除いたファイル名を比較し画像間とラベルで同期しているか確認
-        tf = re.split(f"[.|{os.sep}]", self.img_files[-1])[-2] == re.split(f"[.|{os.sep}]", self.img_files_ir[-1])[-2]
-        assert tf, "RGB-FIR images missing pair"
-        tf = re.split(f"[.|{os.sep}]", self.img_files[-1])[-2] == re.split(f"[.|{os.sep}]", self.label_files[-1])[-2]
-        assert tf, "img and label missing pair"
+                self.label_files.pop(i), self.img_files.pop(i)
         # end of custom code --------------------------------------------------------------------------------------
 
         # Check cache - data_pathの直下にcacheフォルダ作成
@@ -644,7 +608,7 @@ class LoadImagesAndLabels(Dataset):
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
-        self.nchannel = nchannel
+        self.ch = ch
         self.indices = range(n)
 
         # Update labels
@@ -668,7 +632,6 @@ class LoadImagesAndLabels(Dataset):
             ar = s[:, 1] / s[:, 0]  # aspect ratio
             irect = ar.argsort()
             self.img_files = [self.img_files[i] for i in irect]
-            self.img_files_ir = [self.img_files_ir[i] for i in irect]
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
             self.shapes = s[irect]  # wh
@@ -686,6 +649,21 @@ class LoadImagesAndLabels(Dataset):
 
             self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int) * stride
 
+        # RGB, FIRの整理とデータ数の保持
+        if ch == 1:
+            self.img_files_ir = self.img_files
+            nRGB = 0
+            nFIR = len(self.img_files_ir)
+            del self.img_files
+        elif ch == 3:
+            nRGB = len(self.img_files)
+            nFIR = 0
+        elif ch == 2 or ch == 4:  # loading FIR images from RGB image path
+            dst = os.sep + fir_folder + os.sep
+            self.img_files_ir = [x.replace(base, dst) for x in self.img_files]
+            nRGB = len(self.img_files)
+            nFIR = len(self.img_files_ir)
+
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs, self.img_npy = [None] * n, [None] * n
         if cache_images:
@@ -695,10 +673,10 @@ class LoadImagesAndLabels(Dataset):
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            if nchannel == 4:
-                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image_multi(*x), zip(repeat(self), range(n)))
+            if ch == 2 or ch == 4:
+                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image_multi(*x, ch), zip(repeat(self), range(n)))
             else:
-                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
+                results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x, ch), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == "disk":
@@ -716,8 +694,8 @@ class LoadImagesAndLabels(Dataset):
         msg = (
             "##########################\n"
             f"{is_train} data has ...\n"
-            f"RGB: {len(self.img_files)} files\n"
-            f"FIR: {len(self.img_files_ir)} files\n"
+            f"RGB: {nRGB} files\n"
+            f"FIR: {nFIR} files\n"
             f"lables: {sum(len(v) for v in list(labels))} target\n"
             f"label files: {nf} found, {nm} missing, {ne} empty, {nc} corrupted\n"
             "##########################\n"
@@ -769,35 +747,30 @@ class LoadImagesAndLabels(Dataset):
         return x
 
     def __len__(self):
-        return len(self.img_files)
-
-    # def __iter__(self):
-    #     self.count = -1
-    #     print('ran dataset iter')
-    #     #self.shuffled_vector = np.random.permutation(self.nf) if self.augment else np.arange(self.nf)
-    #     return self
+        try:
+            return len(self.img_files)
+        except AttributeError:
+            return len(self.img_files_ir)
 
     def __getitem__(self, index):
+        ch = self.ch
         index = self.indices[index]  # linear, shuffled, or image_weights
 
         hyp = self.hyp
         mosaic = self.mosaic and random.random() < hyp["mosaic"]
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index, self.nchannel)
+            img, labels = load_mosaic(self, index, ch)
             shapes = None
-
             # MixUp augmentation
             if random.random() < hyp["mixup"]:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), self.nchannel))
-
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), ch))
         else:
             # Load image
-            if self.nchannel == 4:
-                img, (h0, w0), (h, w) = load_image_multi(self, index)
+            if ch == 2 or ch == 4:
+                img, (h0, w0), (h, w) = load_image_multi(self, index, ch)  # RGB-FIR
             else:
-                img, (h0, w0), (h, w) = load_image(self, index, self.nchannel)  # RGB or IR
-
+                img, (h0, w0), (h, w) = load_image(self, index, ch)  # RGB or FIR
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
@@ -844,9 +817,13 @@ class LoadImagesAndLabels(Dataset):
 
             # bitwised FIR image
             if "flipbw" in hyp.keys():
-                if random.random() < hyp["flipbw"] and self.nchannel == 4:
-                    b, g, r, ir = cv2.split(img)
-                    img = cv2.merge((b, g, r, cv2.bitwise_not(ir)))
+                if random.random() < hyp["flipbw"] and (ch == 2 or ch == 4):
+                    if ch == 2:
+                        grgb, ir = cv2.split(img)
+                        img = cv2.merge((grgb, cv2.bitwise_not(ir)))
+                    else:
+                        b, g, r, ir = cv2.split(img)
+                        img = cv2.merge((b, g, r, cv2.bitwise_not(ir)))
 
             # Cutouts
             # labels = cutout(img, labels, p=0.5)
@@ -856,10 +833,14 @@ class LoadImagesAndLabels(Dataset):
             labels_out[:, 1:] = torch.from_numpy(labels)
 
         # Convert
-        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGRg to gRGB
+        if ch == 1:
+            img = np.expand_dims(img, axis=2)
+        img = img.transpose((2, 0, 1))[::-1].copy()  # HWC to CHW, BGRg to gRGB
         img = np.ascontiguousarray(img)
-
-        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+        if ch == 1:
+            return torch.from_numpy(img), labels_out, self.img_files_ir[index], shapes
+        else:
+            return torch.from_numpy(img), labels_out, self.img_files[index], shapes
 
     @staticmethod
     def collate_fn(batch):
@@ -897,7 +878,7 @@ class LoadImagesAndLabels(Dataset):
 
 
 # Ancillary functions -------------------------------------------------------------------------------------------------
-def load_image(self, i, nchannel=3):
+def load_image(self, i, ch=3):
     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
     im = self.imgs[i]
     if im is None:  # not cached in ram
@@ -905,13 +886,13 @@ def load_image(self, i, nchannel=3):
         if npy and npy.exists():  # load npy
             im = np.load(npy)
         else:  # read image
-            if nchannel == 1:
+            if ch == 1:
                 path = self.img_files_ir[i]
                 # 1 channel (grayscale), expands the dimension as 1 channel doesn't have detail in img.shape cv2
                 im = np.expand_dims(cv2.imread(path, 0), axis=2)
             else:
                 path = self.img_files[i]
-                im = cv2.imread(path)  # BGR or 3 channel
+                im = cv2.imread(path)
             assert im is not None, f"Image Not Found {path}"
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
@@ -927,7 +908,7 @@ def load_image(self, i, nchannel=3):
 
 
 # add okuda
-def load_image_multi(self, i):
+def load_image_multi(self, i, ch):
     im = self.imgs[i]
     if im is None:
         npy = self.img_npy[i]
@@ -936,7 +917,7 @@ def load_image_multi(self, i):
         else:  # read image
             path_rgb = self.img_files[i]
             path_ir = self.img_files_ir[i]
-            im_rgb = cv2.imread(path_rgb)  # reading rgb
+            im_rgb = cv2.imread(path_rgb) if ch == 4 else cv2.imread(path_rgb, 0)  # reading rgb
             im_ir = cv2.imread(path_ir, 0)  # reading grayscale
             im = cv2.merge((im_rgb, im_ir))  # combine rgb + ir
             assert im is not None, f"Image Not Found {path_rgb}"
@@ -954,7 +935,7 @@ def load_image_multi(self, i):
         return self.imgs[i], self.img_hw0[i], self.img_hw[i]
 
 
-def load_mosaic(self, index, nchannel):
+def load_mosaic(self, index, ch):
     #  4-mosaic loader. Loads 1 image + 3 random images into a 4-image mosaic
     labels4, segments4 = [], []
     s = self.img_size
@@ -963,10 +944,10 @@ def load_mosaic(self, index, nchannel):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        if nchannel == 4:
-            img, _, (h, w) = load_image_multi(self, index)  # for 4 channels
+        if ch == 2 or ch == 4:
+            img, _, (h, w) = load_image_multi(self, index, ch)  # for 2 or 4 channels
         else:
-            img, _, (h, w) = load_image(self, index, nchannel)  # for 3 or 1 channel
+            img, _, (h, w) = load_image(self, index, ch)  # for 3 or 1 channel
 
         # place img in img4
         if i == 0:  # top left
@@ -1273,3 +1254,40 @@ def show_selected(dir: str, idx: list):
         else:
             msg += "□"
     print(msg)
+
+
+def get_imgs_path(dirs, trg_folder, hyp, is_train):
+    fs = []  # ファイルパス
+    for dir in dirs:  # 日付ディレクトリごとに探索
+        # RGBフォルダ下の画像を探索
+        f = sorted(glob.iglob(os.path.join(dir, trg_folder, "*.*"), recursive=True))
+        f = [x for x in f if x.split(".")[-1].lower() in IMG_FORMATS]
+        f.sort(key=lambda s: int(re.search(r"(\d+)\.", s).groups()[0]))  # 自然数で並び替え
+
+        # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
+        spl = split_list(f, 10)
+        if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
+            idx_train = [0, 2, 5, 6, 7]
+            idx_val = [1, 3, 4, 8, 9]
+            # idx_train = [1, 3, 4, 8, 7]
+            # idx_val = [0, 2, 5, 6, 9]
+        else:
+            idx_train = [0, 1, 2, 4, 6, 7, 8]
+            idx_val = [3, 5, 9]
+        # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
+        try:
+            d = int(re.sub(r"\D", "", dir))
+        except Exception:
+            d = ord(dir[-2])
+        idx_train = list(map(lambda x: (x + d) % 10, idx_train))
+        idx_val = list(map(lambda x: (x + d) % 10, idx_val))
+        if is_train == "train":
+            for id in idx_train:
+                fs += spl[id]
+        else:
+            for id in idx_val:
+                fs += spl[id]
+            show_selected(dir, idx_val)
+    if is_train == "val":
+        print("□ is train group, ■ is val group\n")
+    return fs

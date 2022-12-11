@@ -175,19 +175,18 @@ def run(
 
     # Dataloader
     if not training:
+        ch = data["ch"]
         if pt and device.type != "cpu":
-            # model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
-            model(torch.zeros(1, 4, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
+            model(torch.zeros(1, ch, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
         pad = 0.0 if task == "speed" else 0.5
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
-        nchannels = data["ch"]
         dataloader = create_dataloader(
             "val",
             data["data_path"],
             data["rgb_folder"],
             data["fir_folder"],
             data["labels_folder"],
-            nchannels,
+            ch,
             imgsz,
             batch_size,
             stride,
@@ -284,7 +283,7 @@ def run(
             Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Plot images
-    if plots and res:  # 推測と正解ラベル数が計20以上
+    if plots and res:  # ターゲット数が最も多い画像を取得
         batch_i, im, targets, out, paths, names = res
         f = save_dir / f"val_batch{batch_i}_labels.jpg"  # labels
         Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
@@ -303,18 +302,22 @@ def run(
 
     # Print results
     pf = "%20s" + "%11i" * 2 + "%11.3g" * 4  # print format
+    omsg = s + "\n" + pf % ("all", seen, nt.sum(), mp, mr, map50, map)
     LOGGER.info(pf % ("all", seen, nt.sum(), mp, mr, map50, map))
 
     # Print results per class
     if (verbose or (nc < 50 and not training)) and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
+            omsg += "\n" + pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i])
             LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # Print speeds
     t = tuple(x / seen * 1e3 for x in dt)  # speeds per image
     if not training:
         shape = (batch_size, 3, imgsz, imgsz)
-        LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}" % t)
+        msg = f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}" % t
+        omsg += "\n" + msg
+        LOGGER.info(msg)
 
     # Plots
     if plots:
@@ -350,6 +353,8 @@ def run(
     # Return results
     model.float()  # for training
     if not training:
+        with open(save_dir / "best_result.txt", "w") as f:
+            f.write(omsg)
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     maps = np.zeros(nc) + map
