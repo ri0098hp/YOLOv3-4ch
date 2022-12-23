@@ -34,4 +34,5 @@ copy_paste: 0.0 # segment copy-paste (probability)
 
 pos_imgs_train: 550 # number of labeled images to use on training(optionally)
 pos_imgs_val: 550 # number of labeled images to use on testing(optionally)
-neg_ratio: 2.0 # ratio of non-labeled images to labeled ones (optionally)
+neg_ratio_train: 2.0 # ratio of non-labeled images to labeled ones (optionally)
+neg_ratio_val: 2.0 # ratio of non-labeled images to labeled ones (optionally)
