@@ -1,4 +1,5 @@
 *
+!.gitignore
 !hyps
 !fujinolab-all.yaml
 !fujinolab-all-*ch.yaml

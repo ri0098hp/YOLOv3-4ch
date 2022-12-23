@@ -35,7 +35,6 @@ while getopts "abdersh" optKey; do
       --mount type=bind,source="$(pwd)"/data,target=/usr/src/app/data \
       --mount type=bind,source="$(pwd)"/dataset,target=/usr/src/app/dataset \
       --mount type=bind,source="$(pwd)"/weights,target=/usr/src/app/weights \
-      --mount type=bind,source="$(pwd)"/share,target=/usr/src/app/share \
       --mount type=bind,source="$(pwd)"/runs,target=/usr/src/app/runs \
       --mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \
       --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
