@@ -34,7 +34,6 @@ while getopts "abdersh" optKey; do
       docker run --name YOLOv3-okuda --gpus all -it --shm-size=16g --ipc=host \
       --mount type=bind,source="$(pwd)"/data,target=/usr/src/app/data \
       --mount type=bind,source="$(pwd)"/dataset,target=/usr/src/app/dataset \
-      --mount type=bind,source="$(pwd)"/weights,target=/usr/src/app/weights \
       --mount type=bind,source="$(pwd)"/runs,target=/usr/src/app/runs \
       --mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \
       --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
