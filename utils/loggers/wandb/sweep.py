@@ -2,7 +2,6 @@ import sys
 from pathlib import Path
 
 import wandb
-
 from train import parse_opt, train
 from utils.callbacks import Callbacks
 from utils.general import increment_path

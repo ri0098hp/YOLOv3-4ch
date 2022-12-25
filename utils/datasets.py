@@ -544,40 +544,67 @@ class LoadImagesAndLabels(Dataset):
 
         # Reorder dataset --------------------------------------------------------------------------------------
         # limitting numbers of data on training
-        pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
-        pos_num = len(pos_id)  # number of found labels
-        if is_train == "train" and "pos_imgs_train" in hyp.keys():
-            target_num = hyp["pos_imgs_train"]
-            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_train], must be less than {pos_num}"
-            random.seed(0)
-            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
-            idx = random.sample(pos_id, pos_num - target_num)
-            for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i)
-            pos_num = target_num
+        if is_train == "train":
+            # limitting numberrs of data on testing
+            # positive imgs
+            pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
+            pos_num = len(pos_id)  # number of found labels
+            if "pos_imgs_train" in hyp.keys():
+                target_num = hyp["pos_imgs_train"]
+                assert (
+                    target_num <= pos_num
+                ), f"{prefix}please check your hyp[pos_imgs_train], must be less than {pos_num}"
+                random.seed(1)
+                # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
+                idx = random.sample(pos_id, pos_num - target_num)
+                for i in sorted(idx, reverse=True):
+                    self.label_files.pop(i), self.img_files.pop(i)
+                pos_num = target_num
 
-        # limitting numbers of data on testing
-        if is_train == "val" and "pos_imgs_val" in hyp.keys():
-            target_num = hyp["pos_imgs_val"]
-            assert target_num <= pos_num, f"{prefix}please check your hyp[pos_imgs_val], must be less than {pos_num}"
-            random.seed(0)
-            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
-            idx = random.sample(pos_id, pos_num - target_num)
-            for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i)
-            pos_num = target_num
+            # negative imgs
+            neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
+            neg_num = len(neg_id)  # number of missed labels
+            if "neg_ratio_train" in hyp.keys():
+                target_num = pos_num * hyp["neg_ratio_train"]
+                assert (
+                    target_num <= neg_num
+                ), f"{prefix}please check your neg_ratio_train, must be less than {neg_num/pos_num}"
+                random.seed(2)
+                # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
+                idx = random.sample(neg_id, int(neg_num - target_num))
+                for i in sorted(idx, reverse=True):
+                    self.label_files.pop(i), self.img_files.pop(i)
+        else:
+            # limitting numberrs of data on testing
+            # positive imgs
+            pos_id = [i for i, label in enumerate(self.label_files) if os.path.isfile(label)]  # number of found labels
+            pos_num = len(pos_id)  # number of found labels
+            if "pos_imgs_val" in hyp.keys():
+                target_num = hyp["pos_imgs_val"]
+                assert (
+                    target_num <= pos_num
+                ), f"{prefix}please check your hyp[pos_imgs_val], must be less than {pos_num}"
+                random.seed(3)
+                # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-指定のラベル数" 個分をポインタで指定
+                idx = random.sample(pos_id, pos_num - target_num)
+                for i in sorted(idx, reverse=True):
+                    self.label_files.pop(i), self.img_files.pop(i)
+                pos_num = target_num
 
-        # remove path without labels
-        neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
-        neg_num = len(neg_id)  # number of missed labels
-        if "neg_ratio" in hyp.keys():
-            target_num = pos_num * hyp["neg_ratio"]
-            assert target_num <= neg_num, f"{prefix}please check your neg_ratio, must be less than {neg_num/pos_num}"
-            random.seed(0)
-            # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
-            idx = random.sample(neg_id, int(neg_num - target_num))
-            for i in sorted(idx, reverse=True):
-                self.label_files.pop(i), self.img_files.pop(i)
+            # negative imgs
+            neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
+            neg_num = len(neg_id)  # number of missed labels
+            if "neg_ratio_train" in hyp.keys():
+                target_num = pos_num * hyp["neg_ratio_train"]
+                assert (
+                    target_num <= neg_num
+                ), f"{prefix}please check your neg_ratio_train, must be less than {neg_num/pos_num}"
+                random.seed(4)
+                # 現在の有効ラベル群から消去したいラベル, "現在のラベル数-有効ラベル数*指定比率" 個分をポインタで指定
+                idx = random.sample(neg_id, int(neg_num - target_num))
+                for i in sorted(idx, reverse=True):
+                    self.label_files.pop(i), self.img_files.pop(i)
+        random.seed(0)
         # end of custom code --------------------------------------------------------------------------------------
 
         # Check cache - data_pathの直下にcacheフォルダ作成
@@ -1266,25 +1293,19 @@ def get_imgs_path(dirs, trg_folder, hyp, is_train):
 
         # train と test の振り分け - 再現性のためフォルダからハッシュ値を計算しシフト
         spl = split_list(f, 10)
-        if "pos_imgs_train" in hyp.keys() or "pos_imgs_val" in hyp.keys():
-            idx_train = [0, 2, 5, 6, 7]
-            idx_val = [1, 3, 4, 8, 9]
-            # idx_train = [1, 3, 4, 8, 7]
-            # idx_val = [0, 2, 5, 6, 9]
-        else:
-            idx_train = [0, 1, 2, 4, 6, 7, 8]
-            idx_val = [3, 5, 9]
+        idx_train = [0, 1, 2, 4, 6, 7, 8]
+        idx_val = [3, 5, 9]
         # idx_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # test all images
         try:
             d = int(re.sub(r"\D", "", dir))
         except Exception:
             d = ord(dir[-2])
-        idx_train = list(map(lambda x: (x + d) % 10, idx_train))
-        idx_val = list(map(lambda x: (x + d) % 10, idx_val))
         if is_train == "train":
+            idx_train = list(map(lambda x: (x + d) % 10, idx_train))
             for id in idx_train:
                 fs += spl[id]
         else:
+            idx_val = list(map(lambda x: (x + d) % 10, idx_val))
             for id in idx_val:
                 fs += spl[id]
             show_selected(dir, idx_val)

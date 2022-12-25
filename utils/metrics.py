@@ -5,9 +5,9 @@ Model validation metrics
 
 import csv
 import math
+import os
 import warnings
 from pathlib import Path
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
