@@ -594,7 +594,7 @@ class LoadImagesAndLabels(Dataset):
             # negative imgs
             neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
             neg_num = len(neg_id)  # number of missed labels
-            if "neg_ratio_train" in hyp.keys():
+            if "neg_ratio_val" in hyp.keys():
                 target_num = pos_num * hyp["neg_ratio_train"]
                 assert (
                     target_num <= neg_num

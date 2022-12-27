@@ -558,7 +558,7 @@ def parse_opt(known=False):
     parser.add_argument("--quad", action="store_true", help="quad dataloader")
     parser.add_argument("--linear-lr", action="store_true", help="linear LR")
     parser.add_argument("--label-smoothing", type=float, default=0.0, help="Label smoothing epsilon")
-    parser.add_argument("--patience", type=int, default=100, help="EarlyStopping patience")
+    parser.add_argument("--patience", type=int, default=0, help="EarlyStopping patience")
     parser.add_argument("--freeze", type=int, default=0, help="Number of layers to freeze. backbone=10, all=24")
     parser.add_argument("--save-period", type=int, default=-1, help="Save checkpoint every x epochs (disabled if < 1)")
     parser.add_argument("--local_rank", type=int, default=-1, help="DDP parameter, do not modify")
