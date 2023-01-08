@@ -594,7 +594,7 @@ class LoadImagesAndLabels(Dataset):
             # negative imgs
             neg_id = [i for i, label in enumerate(self.label_files) if not os.path.isfile(label)]  # missed labels
             neg_num = len(neg_id)  # number of missed labels
-            if "neg_ratio_train" in hyp.keys():
+            if "neg_ratio_val" in hyp.keys():
                 target_num = pos_num * hyp["neg_ratio_train"]
                 assert (
                     target_num <= neg_num
@@ -631,7 +631,7 @@ class LoadImagesAndLabels(Dataset):
         self.img_files = list(cache.keys())  # update
         self.label_files = img2label_paths(cache.keys())  # update
         n = len(shapes)  # number of images
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
+        bi = np.floor(np.arange(n) / batch_size).astype(np.int64)  # batch index
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
@@ -674,7 +674,7 @@ class LoadImagesAndLabels(Dataset):
                 elif mini > 1:
                     shapes[i] = [1, 1 / mini]
 
-            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int) * stride
+            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int64) * stride
 
         # RGB, FIRの整理とデータ数の保持
         if ch == 1:
@@ -828,7 +828,10 @@ class LoadImagesAndLabels(Dataset):
             nl = len(labels)  # update after albumentations
 
             # HSV color-space
-            augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"])
+            if "hsv_ir" in hyp.keys():
+                augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"], irgain=hyp["hsv_ir"])
+            else:
+                augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"])
 
             # Flip up-down
             if random.random() < hyp["flipud"]:
@@ -843,12 +846,12 @@ class LoadImagesAndLabels(Dataset):
                     labels[:, 1] = 1 - labels[:, 1]
 
             # bitwised FIR image
-            if "flipbw" in hyp.keys():
-                if random.random() < hyp["flipbw"] and (ch == 2 or ch == 4):
+            if "flipir" in hyp.keys():
+                if random.random() < hyp["flipbw"]:
                     if ch == 2:
                         grgb, ir = cv2.split(img)
                         img = cv2.merge((grgb, cv2.bitwise_not(ir)))
-                    else:
+                    elif ch == 4:
                         b, g, r, ir = cv2.split(img)
                         img = cv2.merge((b, g, r, cv2.bitwise_not(ir)))
 
@@ -1068,7 +1071,7 @@ def extract_boxes(path="../datasets/coco128"):  # from utils.datasets import *; 
                     b = x[1:] * [w, h, w, h]  # box
                     # b[2:] = b[2:].max()  # rectangle to square
                     b[2:] = b[2:] * 1.2 + 3  # pad
-                    b = xywh2xyxy(b.reshape(-1, 4)).ravel().astype(np.int)
+                    b = xywh2xyxy(b.reshape(-1, 4)).ravel().astype(np.int64)
 
                     b[[0, 2]] = np.clip(b[[0, 2]], 0, w)  # clip boxes outside of image
                     b[[1, 3]] = np.clip(b[[1, 3]], 0, h)

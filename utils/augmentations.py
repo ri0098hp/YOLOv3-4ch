@@ -47,14 +47,14 @@ class Albumentations:
         return im, labels
 
 
-def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
+def augment_hsv(im, hgain=0.0, sgain=0.0, vgain=0.0, irgain=0.0):
     # HSV color-space augmentation
-    if hgain or sgain or vgain:
+    if hgain or sgain or vgain or irgain:
         nch = im.shape[2]
         if nch == 4:
             b, g, r, ir = cv2.split(im)
             im = cv2.merge((b, g, r))
-        r = np.random.uniform(-1, 1, 4) * [hgain, sgain, vgain, vgain] + 1  # random gains
+        r = np.random.uniform(-1, 1, 4) * [hgain, sgain, vgain, irgain] + 1  # random gains
         hue, sat, val = cv2.split(cv2.cvtColor(im, cv2.COLOR_BGR2HSV))
         dtype = im.dtype  # uint8
 
