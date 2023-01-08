@@ -828,7 +828,10 @@ class LoadImagesAndLabels(Dataset):
             nl = len(labels)  # update after albumentations
 
             # HSV color-space
-            augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"])
+            if "hsv_ir" in hyp.keys():
+                augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"], irgain=hyp["hsv_ir"])
+            else:
+                augment_hsv(img, hgain=hyp["hsv_h"], sgain=hyp["hsv_s"], vgain=hyp["hsv_v"])
 
             # Flip up-down
             if random.random() < hyp["flipud"]:
@@ -843,12 +846,12 @@ class LoadImagesAndLabels(Dataset):
                     labels[:, 1] = 1 - labels[:, 1]
 
             # bitwised FIR image
-            if "flipbw" in hyp.keys():
-                if random.random() < hyp["flipbw"] and (ch == 2 or ch == 4):
+            if "flipir" in hyp.keys():
+                if random.random() < hyp["flipbw"]:
                     if ch == 2:
                         grgb, ir = cv2.split(img)
                         img = cv2.merge((grgb, cv2.bitwise_not(ir)))
-                    else:
+                    elif ch == 4:
                         b, g, r, ir = cv2.split(img)
                         img = cv2.merge((b, g, r, cv2.bitwise_not(ir)))
 
