@@ -2,16 +2,28 @@ yolov3-4ch
 ==========
 
 # Features
-YOLOv3 をRGB-FIR向けに拡張したもの
+YOLOv3 をRGB-FIR向けに拡張したもの. 次の機能をオリジナルから追加している.
+- 1ch, 2ch, 3ch, 4chの学習・テストに対応
+- 4chの推論に対応
+- テスト結果をsvg, csvで保存
+- テスト結果の画像を全て書き出し
 
 # TODO
-基本的にはissueに投げる
+基本的にはissueに投げる.  
+開発をする際には自分のブランチを作成する. その後mainへマージする際には各ブランチ上でpull rebaseした後にPRを投げる. 
+```bash
+git pull --rebase origin main
+```
 
 # Installation
-0. 必要に応じてCUDA Tool Kitを入れる.
-1. cloneする.
+0. 必要に応じてDockerのセットアップやNVIDIA環境を入れる. [[参考]](https://github.com/Rits-Fujinolab/Docker-setup/blob/master/server.md)
+1. cloneする. git環境がある人はOrganizationsにアクセス権限のあるuser名とmailを設定して
   ```bash
-  git clone git@github.com:ri0098hp/YOLOv3-4ch.git
+  git clone git@github.com:Rits-Fujinolab/YOLOv3-4ch.git
+  ```
+  または [GitHub CLI](https://cli.github.com) をインストールしてログイン認証後
+  ```bash
+  gh repo clone Rits-Fujinolab/YOLOv3-4ch
   ```
 
 2. yolov3-4chのフォルダを開きdocker imageをbuildする. 容量は13GBくらいなのでそこそこ時間がかかる.
@@ -20,17 +32,9 @@ YOLOv3 をRGB-FIR向けに拡張したもの
   ```
 
 3. データセットをdatasetフォルダーに入れる. [dataloader](utils/datasets.py) を魔改造してるため次のようなディレクトリ構造推奨...  
-  もしくは過去のverから移植すること(当然buildし直す必要あり).
+  シンボリックリンクでも認識可能なのでデータフォルダを作った後, フォルダごとにリンクを作るとスペースを節約できる.
   ```
   <dataset>
-  ├── debug
-  │   └── 20180903_2040
-  │       ├── FIR
-  │       ├── FIR_labels
-  │       ├── RGB
-  │       ├── RGB_crop
-  │       └── RGB_raw
-  │   
   ├── fujinolab-all
   │   ├── 20180903_1113
   │   │   ├── FIR
@@ -44,6 +48,13 @@ YOLOv3 をRGB-FIR向けに拡張したもの
   │       ├── RGB
   │       ├── RGB_crop
   │       ├── RGB_labels
+  │       └── RGB_raw
+  ├── fujinolab-day
+  │   └── 20180903_1113  <-シンボリックリンク
+  │       ├── FIR
+  │       ├── FIR_labels
+  │       ├── RGB
+  │       ├── RGB_crop
   │       └── RGB_raw
   │   
   └── kaist-all
@@ -59,9 +70,12 @@ YOLOv3 をRGB-FIR向けに拡張したもの
   ```
 
 4. 必要に応じてオンラインで学習状況を確認できる [wandb](https://wandb.ai/home) に登録してログインキーを登録する. 詳細は[公式レポ](https://github.com/ultralytics/yolov5/issues/1289)参照.  
-今まで通りtensor boradを使うなら[次の起動時](#起動)に次のコマンドを実行.
+今まで通りtensor boradを使うなら[次の起動時](#起動)に次のコマンドを実行. また [tools.sh](tools.sh) にてwandb関連のマウントを削除.
 ```bash
 wandb off
+```
+```bash
+--mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \
 ```
 # Usage
 ## 通常モード
@@ -79,11 +93,15 @@ wandb off
   [ここ](memo.txt)を参照. 基本的にはdataオプションとbatch-sizeオプション, epochsオプションで変更すればよい.  
   以下例...
   ```bash
-  python train.py --data [.yamlへのパス] --batch-size [n^2 (自動推定:-1)] --epochs [エポック数]
+  python train.py --data [データyamlへのパス] --hyps [パラメータyamlへのパス] --batch-size [n (自動推定:-1)] --epochs [エポック数]
   ```
 
   ### テスト
-  準備中
+  [ここ](memo.txt)を参照. 基本的にはdataオプションと重みファイルオプションで変更すればよい. スライド用の画像を探す場合はsave-allオプションが便利.  
+  以下例...
+  ```bash
+  python val.py --weights [重みファイルへのパス] --data [データyamlへのパス] --save-all
+  ```
 
   ### 検知
   準備中

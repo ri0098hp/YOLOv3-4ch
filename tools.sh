@@ -16,7 +16,8 @@ EOM
 while getopts "abdersh" optKey; do
   case "$optKey" in
     a)
-      docker start -a YOLOv3-okuda
+      docker restart YOLOv3-okuda
+      docker attach YOLOv3-okuda
       ;;
     b)
       docker build -t yolov3-okuda:latest .
@@ -26,9 +27,6 @@ while getopts "abdersh" optKey; do
       --mount type=bind,source="$(pwd)",target=/usr/src/app/ \
       --mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \
       yolov3-okuda:test
-      ;;
-    e)
-      docker start -i YOLOv3-okuda
       ;;
     r)
       docker run --name YOLOv3-okuda --gpus all -it --shm-size=16g --ipc=host \
