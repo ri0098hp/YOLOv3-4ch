@@ -1,10 +1,11 @@
-yolov3-4ch
+YOLOv3-4ch
 ==========
 
 # Features
 YOLOv3 をRGB-FIR向けに拡張したもの. 次の機能をオリジナルから追加している.
 - 1ch, 2ch, 3ch, 4chの学習・テストに対応
 - 4chの推論に対応
+- データセットの読み込みを確認できるツール `check_dataset.py`
 - テスト結果をsvg, csvで保存
 - テスト結果の画像を全て書き出し
 
@@ -70,13 +71,10 @@ git pull --rebase origin main
   ```
 
 4. 必要に応じてオンラインで学習状況を確認できる [wandb](https://wandb.ai/home) に登録してログインキーを登録する. 詳細は[公式レポ](https://github.com/ultralytics/yolov5/issues/1289)参照.  
-今まで通りtensor boradを使うなら[次の起動時](#起動)に次のコマンドを実行. また [tools.sh](tools.sh) にてwandb関連のマウントを削除.
-```bash
-wandb off
-```
-```bash
---mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \
-```
+今まで通りtensor boradを使うなら[次の起動時](#起動)に`wandb off`をターミナルで実行. また [tools.sh](tools.sh) にてwandb関連のマウントを削除.  
+削除: ~~`--mount type=bind,source="$(pwd)"/wandb,target=/usr/src/app/wandb \`~~  
+削除: ~~`--mount type=bind,source=${HOME}${USERPROFILE}/.netrc,target=/root/.netrc \`~~
+
 # Usage
 ## 通常モード
   ### 起動
