@@ -16,8 +16,9 @@ from threading import Thread
 import numpy as np
 import torch
 import yaml
-from models.common import DetectMultiBackend
 from tqdm import tqdm
+
+from models.common import DetectMultiBackend
 from utils.callbacks import Callbacks
 from utils.datasets import create_dataloader
 from utils.general import (

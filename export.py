@@ -30,10 +30,11 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torch.utils.mobile_optimizer import optimize_for_mobile
+
 from models.common import Conv
 from models.experimental import attempt_load
 from models.yolo import Detect
-from torch.utils.mobile_optimizer import optimize_for_mobile
 from utils.activations import SiLU
 from utils.datasets import LoadImages
 from utils.general import (
@@ -164,8 +165,9 @@ def export_saved_model(
     keras_model = None
     try:
         import tensorflow as tf
-        from models.tf import TFDetect, TFModel
         from tensorflow import keras
+
+        from models.tf import TFDetect, TFModel
 
         LOGGER.info(f"\n{prefix} starting export with tensorflow {tf.__version__}...")
         f = str(file).replace(".pt", "_saved_model")
@@ -212,6 +214,7 @@ def export_tflite(keras_model, im, file, int8, data, ncalib, prefix=colorstr("Te
     #  TensorFlow Lite export
     try:
         import tensorflow as tf
+
         from models.tf import representative_dataset_gen
 
         LOGGER.info(f"\n{prefix} starting export with tensorflow {tf.__version__}...")

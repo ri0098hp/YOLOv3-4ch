@@ -19,13 +19,14 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import val  # for end-of-epoch mAP
 import yaml  # type: ignore
-from models.experimental import attempt_load
-from models.yolo import Model
 from torch.cuda import amp
 from torch.optim import SGD, Adam, lr_scheduler
 from tqdm import tqdm
+
+import val  # for end-of-epoch mAP
+from models.experimental import attempt_load
+from models.yolo import Model
 from utils.autoanchor import check_anchors
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks

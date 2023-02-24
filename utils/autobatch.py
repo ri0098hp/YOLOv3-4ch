@@ -8,6 +8,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 from torch.cuda import amp
+
 from utils.general import LOGGER, colorstr
 from utils.torch_utils import profile
 

@@ -20,8 +20,18 @@ from PIL import Image
 from torch.cuda import amp
 
 from utils.datasets import exif_transpose, letterbox
-from utils.general import (LOGGER, check_requirements, check_suffix, colorstr, increment_path, make_divisible,
-                           non_max_suppression, scale_coords, xywh2xyxy, xyxy2xywh)
+from utils.general import (
+    LOGGER,
+    check_requirements,
+    check_suffix,
+    colorstr,
+    increment_path,
+    make_divisible,
+    non_max_suppression,
+    scale_coords,
+    xywh2xyxy,
+    xyxy2xywh,
+)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import time_sync
 
@@ -173,7 +183,7 @@ class SPP(nn.Module):
     def forward(self, x):
         x = self.cv1(x)
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')  # suppress torch 1.9.0 max_pool2d() warning
+            warnings.simplefilter("ignore")  # suppress torch 1.9.0 max_pool2d() warning
             return self.cv2(torch.cat([x] + [m(x) for m in self.m], 1))
 
 
@@ -189,7 +199,7 @@ class SPPF(nn.Module):
     def forward(self, x):
         x = self.cv1(x)
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')  # suppress torch 1.9.0 max_pool2d() warning
+            warnings.simplefilter("ignore")  # suppress torch 1.9.0 max_pool2d() warning
             y1 = self.m(x)
             y2 = self.m(y1)
             return self.cv2(torch.cat([x, y1, y2, self.m(y2)], 1))
@@ -225,11 +235,14 @@ class GhostBottleneck(nn.Module):
     def __init__(self, c1, c2, k=3, s=1):  # ch_in, ch_out, kernel, stride
         super().__init__()
         c_ = c2 // 2
-        self.conv = nn.Sequential(GhostConv(c1, c_, 1, 1),  # pw
-                                  DWConv(c_, c_, k, s, act=False) if s == 2 else nn.Identity(),  # dw
-                                  GhostConv(c_, c2, 1, 1, act=False))  # pw-linear
-        self.shortcut = nn.Sequential(DWConv(c1, c1, k, s, act=False),
-                                      Conv(c1, c2, 1, 1, act=False)) if s == 2 else nn.Identity()
+        self.conv = nn.Sequential(
+            GhostConv(c1, c_, 1, 1),  # pw
+            DWConv(c_, c_, k, s, act=False) if s == 2 else nn.Identity(),  # dw
+            GhostConv(c_, c2, 1, 1, act=False),
+        )  # pw-linear
+        self.shortcut = (
+            nn.Sequential(DWConv(c1, c1, k, s, act=False), Conv(c1, c2, 1, 1, act=False)) if s == 2 else nn.Identity()
+        )
 
     def forward(self, x):
         return self.conv(x) + self.shortcut(x)
@@ -258,9 +271,9 @@ class Expand(nn.Module):
     def forward(self, x):
         b, c, h, w = x.size()  # assert C / s ** 2 == 0, 'Indivisible gain'
         s = self.gain
-        x = x.view(b, s, s, c // s ** 2, h, w)  # x(1,2,2,16,80,80)
+        x = x.view(b, s, s, c // s**2, h, w)  # x(1,2,2,16,80,80)
         x = x.permute(0, 3, 4, 1, 5, 2).contiguous()  # x(1,16,80,2,80,2)
-        return x.view(b, c // s ** 2, h * s, w * s)  # x(1,16,160,160)
+        return x.view(b, c // s**2, h * s, w * s)  # x(1,16,160,160)
 
 
 class Concat(nn.Module):
@@ -275,7 +288,7 @@ class Concat(nn.Module):
 
 class DetectMultiBackend(nn.Module):
     #  MultiBackend class for python inference on various backends
-    def __init__(self, weights='yolov3.pt', device=None, dnn=True):
+    def __init__(self, weights="yolov3.pt", device=None, dnn=True):
         # Usage:
         #   PyTorch:      weights = *.pt
         #   TorchScript:            *.torchscript.pt
@@ -287,63 +300,73 @@ class DetectMultiBackend(nn.Module):
         #   OpenCV DNN:             *.onnx with dnn=True
         super().__init__()
         w = str(weights[0] if isinstance(weights, list) else weights)
-        suffix, suffixes = Path(w).suffix.lower(), ['.pt', '.onnx', '.tflite', '.pb', '', '.mlmodel']
+        suffix, suffixes = Path(w).suffix.lower(), [".pt", ".onnx", ".tflite", ".pb", "", ".mlmodel"]
         check_suffix(w, suffixes)  # check weights have acceptable suffix
         pt, onnx, tflite, pb, saved_model, coreml = (suffix == x for x in suffixes)  # backend booleans
-        jit = pt and 'torchscript' in w.lower()
-        stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+        jit = pt and "torchscript" in w.lower()
+        stride, names = 64, [f"class{i}" for i in range(1000)]  # assign defaults
 
         if jit:  # TorchScript
-            LOGGER.info(f'Loading {w} for TorchScript inference...')
-            extra_files = {'config.txt': ''}  # model metadata
+            LOGGER.info(f"Loading {w} for TorchScript inference...")
+            extra_files = {"config.txt": ""}  # model metadata
             model = torch.jit.load(w, _extra_files=extra_files)
-            if extra_files['config.txt']:
-                d = json.loads(extra_files['config.txt'])  # extra_files dict
-                stride, names = int(d['stride']), d['names']
+            if extra_files["config.txt"]:
+                d = json.loads(extra_files["config.txt"])  # extra_files dict
+                stride, names = int(d["stride"]), d["names"]
         elif pt:  # PyTorch
             from models.experimental import attempt_load  # scoped to avoid circular import
-            model = torch.jit.load(w) if 'torchscript' in w else attempt_load(weights, map_location=device)
+
+            model = torch.jit.load(w) if "torchscript" in w else attempt_load(weights, map_location=device)
             stride = int(model.stride.max())  # model stride
-            names = model.module.names if hasattr(model, 'module') else model.names  # get class names
+            names = model.module.names if hasattr(model, "module") else model.names  # get class names
         elif coreml:  # CoreML *.mlmodel
             import coremltools as ct
+
             model = ct.models.MLModel(w)
         elif dnn:  # ONNX OpenCV DNN
-            LOGGER.info(f'Loading {w} for ONNX OpenCV DNN inference...')
-            check_requirements(('opencv-python>=4.5.4',))
+            LOGGER.info(f"Loading {w} for ONNX OpenCV DNN inference...")
+            check_requirements(("opencv-python>=4.5.4",))
             net = cv2.dnn.readNetFromONNX(w)
         elif onnx:  # ONNX Runtime
-            LOGGER.info(f'Loading {w} for ONNX Runtime inference...')
+            LOGGER.info(f"Loading {w} for ONNX Runtime inference...")
             cuda = torch.cuda.is_available()
-            check_requirements(('onnx', 'onnxruntime-gpu' if cuda else 'onnxruntime'))
+            check_requirements(("onnx", "onnxruntime-gpu" if cuda else "onnxruntime"))
             import onnxruntime
-            providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if cuda else ['CPUExecutionProvider']
+
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if cuda else ["CPUExecutionProvider"]
             session = onnxruntime.InferenceSession(w, providers=providers)
         else:  # TensorFlow model (TFLite, pb, saved_model)
             import tensorflow as tf
+
             if pb:  # https://www.tensorflow.org/guide/migrate#a_graphpb_or_graphpbtxt
+
                 def wrap_frozen_graph(gd, inputs, outputs):
                     x = tf.compat.v1.wrap_function(lambda: tf.compat.v1.import_graph_def(gd, name=""), [])  # wrapped
-                    return x.prune(tf.nest.map_structure(x.graph.as_graph_element, inputs),
-                                   tf.nest.map_structure(x.graph.as_graph_element, outputs))
+                    return x.prune(
+                        tf.nest.map_structure(x.graph.as_graph_element, inputs),
+                        tf.nest.map_structure(x.graph.as_graph_element, outputs),
+                    )
 
-                LOGGER.info(f'Loading {w} for TensorFlow *.pb inference...')
+                LOGGER.info(f"Loading {w} for TensorFlow *.pb inference...")
                 graph_def = tf.Graph().as_graph_def()
-                graph_def.ParseFromString(open(w, 'rb').read())
+                graph_def.ParseFromString(open(w, "rb").read())
                 frozen_func = wrap_frozen_graph(gd=graph_def, inputs="x:0", outputs="Identity:0")
             elif saved_model:
-                LOGGER.info(f'Loading {w} for TensorFlow saved_model inference...')
+                LOGGER.info(f"Loading {w} for TensorFlow saved_model inference...")
                 model = tf.keras.models.load_model(w)
             elif tflite:  # https://www.tensorflow.org/lite/guide/python#install_tensorflow_lite_for_python
-                if 'edgetpu' in w.lower():
-                    LOGGER.info(f'Loading {w} for TensorFlow Edge TPU inference...')
+                if "edgetpu" in w.lower():
+                    LOGGER.info(f"Loading {w} for TensorFlow Edge TPU inference...")
                     import tflite_runtime.interpreter as tfli
-                    delegate = {'Linux': 'libedgetpu.so.1',  # install https://coral.ai/software/#edgetpu-runtime
-                                'Darwin': 'libedgetpu.1.dylib',
-                                'Windows': 'edgetpu.dll'}[platform.system()]
+
+                    delegate = {
+                        "Linux": "libedgetpu.so.1",  # install https://coral.ai/software/#edgetpu-runtime
+                        "Darwin": "libedgetpu.1.dylib",
+                        "Windows": "edgetpu.dll",
+                    }[platform.system()]
                     interpreter = tfli.Interpreter(model_path=w, experimental_delegates=[tfli.load_delegate(delegate)])
                 else:
-                    LOGGER.info(f'Loading {w} for TensorFlow Lite inference...')
+                    LOGGER.info(f"Loading {w} for TensorFlow Lite inference...")
                     interpreter = tf.lite.Interpreter(model_path=w)  # load TFLite model
                 interpreter.allocate_tensors()  # allocate
                 input_details = interpreter.get_input_details()  # inputs
@@ -358,11 +381,11 @@ class DetectMultiBackend(nn.Module):
             return y if val else y[0]
         elif self.coreml:  # CoreML *.mlmodel
             im = im.permute(0, 2, 3, 1).cpu().numpy()  # torch BCHW to numpy BHWC shape(1,320,192,3)
-            im = Image.fromarray((im[0] * 255).astype('uint8'))
+            im = Image.fromarray((im[0] * 255).astype("uint8"))
             # im = im.resize((192, 320), Image.ANTIALIAS)
-            y = self.model.predict({'image': im})  # coordinates are xywh normalized
-            box = xywh2xyxy(y['coordinates'] * [[w, h, w, h]])  # xyxy pixels
-            conf, cls = y['confidence'].max(1), y['confidence'].argmax(1).astype(np.float)
+            y = self.model.predict({"image": im})  # coordinates are xywh normalized
+            box = xywh2xyxy(y["coordinates"] * [[w, h, w, h]])  # xyxy pixels
+            conf, cls = y["confidence"].max(1), y["confidence"].argmax(1).astype(np.float)
             y = np.concatenate((box, conf.reshape(-1, 1), cls.reshape(-1, 1)), 1)
         elif self.onnx:  # ONNX
             im = im.cpu().numpy()  # torch to numpy
@@ -379,15 +402,15 @@ class DetectMultiBackend(nn.Module):
                 y = self.model(im, training=False).numpy()
             elif self.tflite:
                 input, output = self.input_details[0], self.output_details[0]
-                int8 = input['dtype'] == np.uint8  # is TFLite quantized uint8 model
+                int8 = input["dtype"] == np.uint8  # is TFLite quantized uint8 model
                 if int8:
-                    scale, zero_point = input['quantization']
+                    scale, zero_point = input["quantization"]
                     im = (im / scale + zero_point).astype(np.uint8)  # de-scale
-                self.interpreter.set_tensor(input['index'], im)
+                self.interpreter.set_tensor(input["index"], im)
                 self.interpreter.invoke()
-                y = self.interpreter.get_tensor(output['index'])
+                y = self.interpreter.get_tensor(output["index"])
                 if int8:
-                    scale, zero_point = output['quantization']
+                    scale, zero_point = output["quantization"]
                     y = (y.astype(np.float32) - zero_point) * scale  # re-scale
             y[..., 0] *= w  # x
             y[..., 1] *= h  # y
@@ -410,7 +433,7 @@ class AutoShape(nn.Module):
         self.model = model.eval()
 
     def autoshape(self):
-        LOGGER.info('AutoShape already enabled, skipping... ')  # model already converted to model.autoshape()
+        LOGGER.info("AutoShape already enabled, skipping... ")  # model already converted to model.autoshape()
         return self
 
     def _apply(self, fn):
@@ -437,26 +460,26 @@ class AutoShape(nn.Module):
         t = [time_sync()]
         p = next(self.model.parameters())  # for device and type
         if isinstance(imgs, torch.Tensor):  # torch
-            with amp.autocast(enabled=p.device.type != 'cpu'):
+            with amp.autocast(enabled=p.device.type != "cpu"):
                 return self.model(imgs.to(p.device).type_as(p), augment, profile)  # inference
 
         # Pre-process
         n, imgs = (len(imgs), imgs) if isinstance(imgs, list) else (1, [imgs])  # number of images, list of images
         shape0, shape1, files = [], [], []  # image and inference shapes, filenames
         for i, im in enumerate(imgs):
-            f = f'image{i}'  # filename
+            f = f"image{i}"  # filename
             if isinstance(im, (str, Path)):  # filename or uri
-                im, f = Image.open(requests.get(im, stream=True).raw if str(im).startswith('http') else im), im
+                im, f = Image.open(requests.get(im, stream=True).raw if str(im).startswith("http") else im), im
                 im = np.asarray(exif_transpose(im))
             elif isinstance(im, Image.Image):  # PIL Image
-                im, f = np.asarray(exif_transpose(im)), getattr(im, 'filename', f) or f
-            files.append(Path(f).with_suffix('.jpg').name)
+                im, f = np.asarray(exif_transpose(im)), getattr(im, "filename", f) or f
+            files.append(Path(f).with_suffix(".jpg").name)
             if im.shape[0] < 5:  # image in CHW
                 im = im.transpose((1, 2, 0))  # reverse dataloader .transpose(2, 0, 1)
             im = im[..., :3] if im.ndim == 3 else np.tile(im[..., None], 3)  # enforce 3ch input
             s = im.shape[:2]  # HWC
             shape0.append(s)  # image shape
-            g = (size / max(s))  # gain
+            g = size / max(s)  # gain
             shape1.append([y * g for y in s])
             imgs[i] = im if im.data.contiguous else np.ascontiguousarray(im)  # update
         shape1 = [make_divisible(x, int(self.stride.max())) for x in np.stack(shape1, 0).max(0)]  # inference shape
@@ -466,14 +489,20 @@ class AutoShape(nn.Module):
         x = torch.from_numpy(x).to(p.device).type_as(p) / 255  # uint8 to fp16/32
         t.append(time_sync())
 
-        with amp.autocast(enabled=p.device.type != 'cpu'):
+        with amp.autocast(enabled=p.device.type != "cpu"):
             # Inference
             y = self.model(x, augment, profile)[0]  # forward
             t.append(time_sync())
 
             # Post-process
-            y = non_max_suppression(y, self.conf, iou_thres=self.iou, classes=self.classes,
-                                    multi_label=self.multi_label, max_det=self.max_det)  # NMS
+            y = non_max_suppression(
+                y,
+                self.conf,
+                iou_thres=self.iou,
+                classes=self.classes,
+                multi_label=self.multi_label,
+                max_det=self.max_det,
+            )  # NMS
             for i in range(n):
                 scale_coords(shape1, y[i][:, :4], shape0[i])
 
@@ -499,10 +528,10 @@ class Detections:
         self.t = tuple((times[i + 1] - times[i]) * 1000 / self.n for i in range(3))  # timestamps (ms)
         self.s = shape  # inference BCHW shape
 
-    def display(self, pprint=False, show=False, save=False, crop=False, render=False, save_dir=Path('')):
+    def display(self, pprint=False, show=False, save=False, crop=False, render=False, save_dir=Path("")):
         crops = []
         for i, (im, pred) in enumerate(zip(self.imgs, self.pred)):
-            s = f'image {i + 1}/{len(self.pred)}: {im.shape[0]}x{im.shape[1]} '  # string
+            s = f"image {i + 1}/{len(self.pred)}: {im.shape[0]}x{im.shape[1]} "  # string
             if pred.shape[0]:
                 for c in pred[:, -1].unique():
                     n = (pred[:, -1] == c).sum()  # detections per class
@@ -510,20 +539,27 @@ class Detections:
                 if show or save or render or crop:
                     annotator = Annotator(im, example=str(self.names))
                     for *box, conf, cls in reversed(pred):  # xyxy, confidence, class
-                        label = f'{self.names[int(cls)]} {conf:.2f}'
+                        label = f"{self.names[int(cls)]} {conf:.2f}"
                         if crop:
-                            file = save_dir / 'crops' / self.names[int(cls)] / self.files[i] if save else None
-                            crops.append({'box': box, 'conf': conf, 'cls': cls, 'label': label,
-                                          'im': save_one_box(box, im, file=file, save=save)})
+                            file = save_dir / "crops" / self.names[int(cls)] / self.files[i] if save else None
+                            crops.append(
+                                {
+                                    "box": box,
+                                    "conf": conf,
+                                    "cls": cls,
+                                    "label": label,
+                                    "im": save_one_box(box, im, file=file, save=save),
+                                }
+                            )
                         else:  # all others
                             annotator.box_label(box, label, color=colors(cls))
                     im = annotator.im
             else:
-                s += '(no detections)'
+                s += "(no detections)"
 
             im = Image.fromarray(im.astype(np.uint8)) if isinstance(im, np.ndarray) else im  # from np
             if pprint:
-                LOGGER.info(s.rstrip(', '))
+                LOGGER.info(s.rstrip(", "))
             if show:
                 im.show(self.files[i])  # show
             if save:
@@ -535,23 +571,24 @@ class Detections:
                 self.imgs[i] = np.asarray(im)
         if crop:
             if save:
-                LOGGER.info(f'Saved results to {save_dir}\n')
+                LOGGER.info(f"Saved results to {save_dir}\n")
             return crops
 
     def print(self):
         self.display(pprint=True)  # print results
-        LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {tuple(self.s)}' %
-                    self.t)
+        LOGGER.info(
+            f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {tuple(self.s)}" % self.t
+        )
 
     def show(self):
         self.display(show=True)  # show results
 
-    def save(self, save_dir='runs/detect/exp'):
-        save_dir = increment_path(save_dir, exist_ok=save_dir != 'runs/detect/exp', mkdir=True)  # increment save_dir
+    def save(self, save_dir="runs/detect/exp"):
+        save_dir = increment_path(save_dir, exist_ok=save_dir != "runs/detect/exp", mkdir=True)  # increment save_dir
         self.display(save=True, save_dir=save_dir)  # save results
 
-    def crop(self, save=True, save_dir='runs/detect/exp'):
-        save_dir = increment_path(save_dir, exist_ok=save_dir != 'runs/detect/exp', mkdir=True) if save else None
+    def crop(self, save=True, save_dir="runs/detect/exp"):
+        save_dir = increment_path(save_dir, exist_ok=save_dir != "runs/detect/exp", mkdir=True) if save else None
         return self.display(crop=True, save=save, save_dir=save_dir)  # crop results
 
     def render(self):
@@ -561,9 +598,9 @@ class Detections:
     def pandas(self):
         # return detections as pandas DataFrames, i.e. print(results.pandas().xyxy[0])
         new = copy(self)  # return copy
-        ca = 'xmin', 'ymin', 'xmax', 'ymax', 'confidence', 'class', 'name'  # xyxy columns
-        cb = 'xcenter', 'ycenter', 'width', 'height', 'confidence', 'class', 'name'  # xywh columns
-        for k, c in zip(['xyxy', 'xyxyn', 'xywh', 'xywhn'], [ca, ca, cb, cb]):
+        ca = "xmin", "ymin", "xmax", "ymax", "confidence", "class", "name"  # xyxy columns
+        cb = "xcenter", "ycenter", "width", "height", "confidence", "class", "name"  # xywh columns
+        for k, c in zip(["xyxy", "xyxyn", "xywh", "xywhn"], [ca, ca, cb, cb]):
             a = [[x[:5] + [int(x[5]), self.names[int(x[5])]] for x in x.tolist()] for x in getattr(self, k)]  # update
             setattr(new, k, [pd.DataFrame(x, columns=c) for x in a])
         return new
@@ -572,7 +609,7 @@ class Detections:
         # return a list of Detections objects, i.e. 'for result in results.tolist():'
         x = [Detections([self.imgs[i]], [self.pred[i]], self.names, self.s) for i in range(self.n)]
         for d in x:
-            for k in ['imgs', 'pred', 'xyxy', 'xyxyn', 'xywh', 'xywhn']:
+            for k in ["imgs", "pred", "xyxy", "xyxyn", "xywh", "xywhn"]:
                 setattr(d, k, getattr(d, k)[0])  # pop out of list
         return x
 
