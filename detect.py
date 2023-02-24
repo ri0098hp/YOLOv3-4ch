@@ -92,6 +92,8 @@ def run(
     model = DetectMultiBackend(weights, device=device, dnn=dnn)
     stride, names, pt, jit, onnx = model.stride, model.names, model.pt, model.jit, model.onnx
     imgsz = check_img_size(imgsz, s=stride)  # check image size
+    ch = model.model.yaml["ch"]  # get channel size from model yaml
+    print(f"{ch} channel mode")
 
     # Half
     half &= pt and device.type != "cpu"  # half precision only supported by PyTorch on CUDA
@@ -99,20 +101,19 @@ def run(
         model.model.half() if half else model.model.float()
 
     # Dataloader
-    nchannels = 3
     if webcam:
         view_img = check_imshow()
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt and not jit)
         bs = len(dataset)  # batch_size
     else:
-        dataset = LoadImages(source, nchannels, img_size=imgsz, stride=stride, auto=pt and not jit)
+        dataset = LoadImages(source, ch, img_size=imgsz, stride=stride, auto=pt and not jit)
         bs = 1  # batch_size
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     # Run inference
     if pt and device.type != "cpu":
-        model(torch.zeros(1, nchannels, *imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
+        model(torch.zeros(1, ch, *imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
     for path_rgb, path_fir, im, im0s, vid_cap, s in dataset:
         t1 = time_sync()
@@ -143,7 +144,17 @@ def run(
             seen += 1
             im0 = im0s
             out = save_dir
-            if nchannels == 4:
+            if ch == 1:
+                p = Path(path_fir)
+                save_path = str(Path(out) / Path(p).name)
+                txt_path = str(save_dir / "labels" / p.stem)  # im.txt
+                os.makedirs(Path(save_path).parent, exist_ok=True)
+            elif ch == 3:
+                p = Path(path_rgb)
+                save_path = str(Path(out) / Path(p).name)
+                txt_path = str(save_dir / "labels" / p.stem)  # im.txt
+                os.makedirs(Path(save_path).parent, exist_ok=True)
+            else:
                 p_rgb = Path(path_rgb)
                 p_fir = Path(path_fir)
                 filename_rgb = "RGB" + os.sep + str(p_rgb.name)
@@ -153,10 +164,6 @@ def run(
                 txt_path = str(save_dir / "labels" / p_fir.stem)  # im.txt
                 os.makedirs(Path(save_path_rgb).parent, exist_ok=True)
                 os.makedirs(Path(save_path_fir).parent, exist_ok=True)
-            else:
-                p = ""
-                save_path = str(Path(out) / Path(p).name)
-                txt_path = str(save_dir / "labels" / p.stem)  # im.txt
             s += "%gx%g " % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
@@ -181,7 +188,11 @@ def run(
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f"{names[c]} {conf:.2f}")
-                        annotator.box_label(xyxy, label, color=colors(c, True))
+                        if ch == 1 or ch == 2:
+                            color = (0,) * ch
+                        else:
+                            color = colors(c, True)
+                        annotator.box_label(xyxy, label, color=color)
 
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
@@ -198,7 +209,7 @@ def run(
             # Save results (image with detections)
             if save_img:
                 if dataset.mode == "image":
-                    if nchannels == 4:
+                    if ch == 4:
                         # split 4 channels, already in RGB+IR format from datasets_multi.py
                         r, g, b, img_ir = cv2.split(im0)
                         img_rgb = cv2.merge((r, g, b))  # for making rgb images
@@ -237,9 +248,7 @@ def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov3.pt", help="model path(s)")
     parser.add_argument("--source", type=str, default=ROOT / "dataset/imgs", help="file/dir/URL/glob, 0 for webcam")
-    parser.add_argument(
-        "--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w"
-    )
+    parser.add_argument("--imgsz", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.45, help="NMS IoU threshold")
     parser.add_argument("--max-det", type=int, default=1000, help="maximum detections per image")

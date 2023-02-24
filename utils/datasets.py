@@ -27,8 +27,18 @@ from torch.utils.data import DataLoader, Dataset, dataloader, distributed
 from tqdm import tqdm
 
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
-from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
-                           xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
+from utils.general import (
+    LOGGER,
+    check_dataset,
+    check_requirements,
+    check_yaml,
+    clean_str,
+    segments2boxes,
+    xyn2xy,
+    xywh2xyxy,
+    xywhn2xyxy,
+    xyxy2xywhn,
+)
 from utils.torch_utils import torch_distributed_zero_first
 
 # Parameters
@@ -211,11 +221,8 @@ class LoadImages:
         path = str(Path(path))  # os-agnostic
         files = []
         if os.path.isdir(path):
-            if ch == 4:
-                RGB_file = sorted(glob.glob(os.path.join(path, "RGB", "*.*")))
-                IR_file = sorted(glob.glob(os.path.join(path, "FIR", "*.*")))
-            else:
-                files = sorted(glob.glob(os.path.join(path, "*.*")))
+            RGB_file = sorted(glob.glob(os.path.join(path, "RGB", "*.*")))
+            FIR_file = sorted(glob.glob(os.path.join(path, "FIR", "*.*")))
         elif os.path.isfile(path):
             files = [path]
         else:
@@ -223,17 +230,21 @@ class LoadImages:
 
         videos = [x for x in files if x.split(".")[-1].lower() in VID_FORMATS]
         nv = len(videos)
-        if ch == 4:
+        if ch == 1:
+            images_FIR = [x for x in FIR_file if x.split(".")[-1].lower() in IMG_FORMATS]
+            self.img_FIR = images_FIR
+            ni = len(images_FIR)
+        elif ch == 3:
             images_RGB = [x for x in RGB_file if x.split(".")[-1].lower() in IMG_FORMATS]
-            images_IR = [x for x in IR_file if x.split(".")[-1].lower() in IMG_FORMATS]
+            self.img_RGB = images_RGB
+            ni = len(images_RGB)
+        else:
+            images_RGB = [x for x in RGB_file if x.split(".")[-1].lower() in IMG_FORMATS]
+            images_FIR = [x for x in FIR_file if x.split(".")[-1].lower() in IMG_FORMATS]
             # a pair, so not counting 2 different images, assuming no videos
             ni = len(images_RGB)
             self.img_RGB = images_RGB
-            self.img_IR = images_IR
-        else:
-            images = [x for x in files if x.split(".")[-1].lower() in IMG_FORMATS]
-            self.files = images + videos
-            ni, nv = len(images), len(videos)
+            self.img_FIR = images_FIR
 
         self.ch = ch
         self.img_size = img_size
@@ -256,14 +267,19 @@ class LoadImages:
         return self
 
     def __next__(self):
+        ch = self.ch
         if self.count == self.nf:
             raise StopIteration
 
-        if self.ch == 4:
+        if ch == 1:
+            path_RGB = None
+            path_FIR = self.img_FIR[self.count]
+        elif ch == 3:
             path_RGB = self.img_RGB[self.count]
-            path_IR = self.img_IR[self.count]
+            path_FIR = None
         else:
-            path = self.files[self.count]
+            path_RGB = self.img_RGB[self.count]
+            path_FIR = self.img_FIR[self.count]
 
         if self.video_flag[self.count]:
             # Read video
@@ -286,31 +302,35 @@ class LoadImages:
             # Read image
             self.count += 1
             s = f"image {self.count}: "
-            if self.ch == 1:
-                img0 = cv2.imread(path, 0)  # grayscale
-            elif self.ch == 4:
+            if ch == 1:
+                img0 = cv2.imread(path_FIR, 0)  # grayscale
+            elif ch == 3:
+                img0 = cv2.imread(path_RGB)
+            else:
                 img_rgb = cv2.imread(path_RGB)
-                img_ir = cv2.imread(path_IR, 0)
+                img_ir = cv2.imread(path_FIR, 0)
 
                 # merge the file for 4 channel
                 img0 = cv2.merge((img_rgb, img_ir))
-            else:
-                img0 = cv2.imread(path)  # BGR / 3 channel
 
-            if self.ch == 4:
+            if ch == 1:
+                assert img0 is not None, "Image Not Found " + path_FIR
+            elif ch == 3:
                 assert img0 is not None, "Image Not Found " + path_RGB
-                assert img0 is not None, "Image Not Found " + path_IR
             else:
-                assert img0 is not None, "Image Not Found " + path
+                assert img0 is not None, "Image Not Found " + path_RGB
+                assert img0 is not None, "Image Not Found " + path_FIR
 
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
 
         # Convert
-        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        if ch == 1:
+            img = np.expand_dims(img, axis=2)
+        img = img.transpose((2, 0, 1))[::-1].copy()  # HWC to CHW, BGRg to gRGB
         img = np.ascontiguousarray(img)
 
-        return path_RGB, path_IR, img, img0, self.cap, s
+        return path_RGB, path_FIR, img, img0, self.cap, s
 
     def new_video(self, path):
         self.frame = 0
@@ -319,48 +339,6 @@ class LoadImages:
 
     def __len__(self):
         return self.nf  # number of files
-
-
-class LoadWebcam:  # for inference
-    #  local webcam dataloader, i.e. `python detect.py --source 0`
-    def __init__(self, pipe="0", img_size=640, stride=32):
-        self.img_size = img_size
-        self.stride = stride
-        self.pipe = eval(pipe) if pipe.isnumeric() else pipe
-        self.cap = cv2.VideoCapture(self.pipe)  # video capture object
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)  # set buffer size
-
-    def __iter__(self):
-        self.count = -1
-        return self
-
-    def __next__(self):
-        self.count += 1
-        if cv2.waitKey(1) == ord("q"):  # q to quit
-            self.cap.release()
-            cv2.destroyAllWindows()
-            raise StopIteration
-
-        # Read frame
-        ret_val, img0 = self.cap.read()
-        img0 = cv2.flip(img0, 1)  # flip left-right
-
-        # Print
-        assert ret_val, f"Camera Error {self.pipe}"
-        img_path = "webcam.jpg"
-        s = f"webcam {self.count}: "
-
-        # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride)[0]
-
-        # Convert
-        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-        img = np.ascontiguousarray(img)
-
-        return img_path, img, img0, None, s
-
-    def __len__(self):
-        return 0
 
 
 class LoadStreams:
