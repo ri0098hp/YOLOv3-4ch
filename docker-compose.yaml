@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  main:
+    # Names
+    image: yolov3-okuda
+    container_name: YOLOv3-4ch
+    hostname: YOLOv3-4ch
+    user: suwako
+    # Property
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: -1
+    shm_size: 16g
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [ gpu ]
+    volumes:
+      - type: bind
+        source: ./
+        target: /home/suwako/workspace
+    working_dir: /home/suwako/workspace
+    command: sleep infinity
+    tty: true
+    stdin_open: true
